@@ -47,6 +47,11 @@ class Settings(BaseSettings):
     # --- THEMIS dead-man's-switch ----------------------------------------
     heartbeat_ttl_seconds: int = Field(default=3600, ge=1)
 
+    # --- BASANOS integrity gating (v2) -----------------------------------
+    # When true, an autonomy level above 'draft' also requires a passing
+    # integrity certificate (adversarial robustness), not just fidelity.
+    require_integrity_certification: bool = False
+
     # --- Service ----------------------------------------------------------
     api_host: str = "127.0.0.1"
     api_port: int = 8000

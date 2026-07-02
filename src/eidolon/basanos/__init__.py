@@ -7,5 +7,20 @@ its seam is stubbed and raises NotImplementedError.
 """
 
 from eidolon.basanos.certify import Basanos, Certificate
+from eidolon.basanos.integrity import (
+    IntegrityCertificate,
+    IntegrityReport,
+    IntegrityRunner,
+    KairosTwinAdapter,
+    TwinUnderTest,
+)
 
-__all__ = ["Basanos", "Certificate"]
+__all__ = [
+    "Basanos",
+    "Certificate",
+    "IntegrityReport",
+    "IntegrityCertificate",
+    "IntegrityRunner",
+    "KairosTwinAdapter",
+    "TwinUnderTest",
+]

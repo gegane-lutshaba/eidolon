@@ -19,6 +19,7 @@ Structural guarantee: the ONLY place this module executes a side effect is
 from __future__ import annotations
 
 from eidolon.basanos.certify import Basanos, Certificate
+from eidolon.basanos.integrity.report import IntegrityCertificate
 from eidolon.common.errors import AttestationFailed
 from eidolon.config import Settings, get_settings
 from eidolon.ethos.facade import Ethos
@@ -61,6 +62,7 @@ class Kairos:
         context: Context,
         chain: list[Delegation],
         certificates: list[Certificate] | None = None,
+        integrity_certificate: IntegrityCertificate | None = None,
     ) -> Decision:
         certificates = certificates or []
 
@@ -118,7 +120,14 @@ class Kairos:
         care = judgment.decision == EthosDecision.PROCEED_WITH_CARE
 
         # -- Step 3: autonomy ceiling = min(cred, basanos, dial) ----------
-        basanos_ceiling = self._basanos.autonomy_ceiling(action.action_class, certificates)
+        # BASANOS ceiling folds in fidelity and — when integrity gating is on —
+        # adversarial-robustness certification (v2).
+        basanos_ceiling = self._basanos.gated_ceiling(
+            action.action_class,
+            certificates,
+            integrity_certificate,
+            require_integrity=self._settings.require_integrity_certification,
+        )
         autonomy = min_autonomy(
             effective.max_autonomy, basanos_ceiling, self._settings.autonomy_dial
         )

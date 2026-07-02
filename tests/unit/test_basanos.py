@@ -24,11 +24,6 @@ def test_uncertified_class_defaults_to_observe() -> None:
     assert Basanos().autonomy_ceiling("post-status", []) == "observe"
 
 
-def test_integrity_suite_is_v2_stub(profile) -> None:
-    with pytest.raises(NotImplementedError):
-        Basanos().integrity_suite(twin=object(), profile=profile)
-
-
 def _heldout(cls: str, decision: str, escalated: bool = False) -> HeldoutDecision:
     return HeldoutDecision(
         action=Action(id="h", action_class=cls, description="d"),

@@ -41,7 +41,7 @@ Two invariants override everything and are property-tested in CI:
 | **THEMIS** | `eidolon.themis` | Authority. Ed25519-signed, chained, attenuable delegation credentials (biscuit/macaroon lineage). |
 | **KAIROS** | `eidolon.kairos` | The single action gate. LOCKED resolution order; attest-then-act. |
 | **HORKOS** | `eidolon.horkos` | Immutable attestation on SAGE's consensus ledger. |
-| **BASANOS** | `eidolon.basanos` | Certification (fidelity face). Gates the autonomy ceiling. Integrity face stubbed (v2). |
+| **BASANOS** | `eidolon.basanos` | Certification. Fidelity face + **integrity face** (adversarial suites) both gate the autonomy ceiling. |
 | **Capture** | `eidolon.capture` | Consent-gated ingestion of traces into SAGE. |
 | **Domain Profile** | `eidolon.profile` | Declarative pack specialising the fixed core. Ships `general-continuity`. |
 
@@ -87,10 +87,18 @@ judgment or authority decision ever depends on the LLM.**
 
 ## Status
 
-Phase 0 + Phase 1 of the PRD are implemented and tested (65 tests: unit +
-Hypothesis property tests + live-SAGE integration). Deferred to v2 (seams
-stubbed): BASANOS integrity face, the `offensive-security` profile, Hermes-style
-self-generated skills, and the aspirational-self layer.
+Phase 0 + Phase 1 of the PRD are implemented and tested (69 tests: unit +
+Hypothesis property tests + live-SAGE integration).
+
+**v2 in progress.** The **BASANOS integrity face** is now built: adversarial
+suites (memory-poisoning, injection, scope-evasion) in `eidolon.basanos.integrity`,
+an `IntegrityCertificate`, and integrity gating of the autonomy ceiling
+(enable with `EIDOLON_REQUIRE_INTEGRITY_CERTIFICATION=true` — an autonomy level
+above `draft` then also requires a passing integrity certificate).
+
+Still deferred: the `offensive-security` profile (unblocked now that the
+integrity face exists, per §2.2), Hermes-style self-generated skills, the
+aspirational-self layer, and multi-connector capture.
 
 ## License
 
