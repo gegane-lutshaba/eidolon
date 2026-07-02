@@ -1,0 +1,68 @@
+# EIDOLON v1 beachhead profile (PRD §9).
+# A twin for an absent/incapacitated knowledge worker. Holds no dangerous
+# capability: at most answers, drafts, and posts recoverable status updates.
+# `commit-action` always escalates.
+domain_profile:
+  id: general-continuity
+  version: 1.0.0
+  name: General knowledge-worker continuity
+
+  capability_taxonomy:
+    - class: answer-status
+      description: Answer a factual status question from recalled context.
+      reversibility: reversible
+      risk_tier: 0
+      default_autonomy_ceiling: autonomous
+    - class: retrieve-context
+      description: Surface what the principal was working on.
+      reversibility: reversible
+      risk_tier: 0
+      default_autonomy_ceiling: autonomous
+    - class: draft-comm
+      description: Draft a communication for the principal's approval.
+      reversibility: reversible
+      risk_tier: 1
+      default_autonomy_ceiling: draft
+    - class: post-status
+      description: Post a recoverable status update to a channel.
+      reversibility: recoverable
+      risk_tier: 2
+      default_autonomy_ceiling: notify
+    - class: commit-action
+      description: Any externally-binding or irreversible commitment.
+      reversibility: irreversible
+      risk_tier: 3
+      default_autonomy_ceiling: draft
+
+  mandate_schema:
+    scope_selectors: [project, system, channel]
+    exclusion_types:
+      - financial-commitment
+      - external-client-comm
+      - personnel-decision
+      - legal-commitment
+    escalation_required: [commit-action]
+    budget_dimensions: [posts_per_window]
+
+  escalation_templates:
+    - trigger: low-confidence
+      message_template: "I'm not sure how {principal} would handle {situation} — flagging for you."
+      urgency: normal
+    - trigger: out-of-scope
+      message_template: "This touches {boundary}, which is outside the mandate. Escalating."
+      urgency: high
+
+  fidelity_rubric:
+    decision_points: [answer-status, draft-comm, post-status]
+    agreement_metric: "scope+stop+escalate exact match"
+    calibration_target: 0.85
+
+  tool_bindings:
+    - class: answer-status
+      mcp_tool_ref: "project-tracker.read"
+    - class: retrieve-context
+      mcp_tool_ref: "docs.read"
+    - class: draft-comm
+      mcp_tool_ref: "mail.compose"
+    - class: post-status
+      mcp_tool_ref: "chat.post"

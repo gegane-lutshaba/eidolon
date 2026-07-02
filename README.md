@@ -1,93 +1,141 @@
 # EIDOLON
 
+**Sovereign delegated agency for faithful digital twins.** Built on
+[SAGE](https://github.com/l33tdawg/sage). Domain-agnostic core. Beachhead
+profile: `general-continuity`.
 
+EIDOLON lets a person delegate a cryptographically bounded, revocable, fully
+attributable slice of their professional authority to a digital twin that
+decides the way they would. It owns the **identity-fidelity and
+delegated-authority** layer on top of SAGE's consensus-validated memory
+substrate. See [`docs/EIDOLON_PRD_v1.md`](docs/EIDOLON_PRD_v1.md) for the full
+contract.
 
-## Getting started
+Two invariants override everything and are property-tested in CI:
 
-To make it easy for you to get started with GitLab, here's a list of recommended next steps.
+1. **Default-deny** — any authority not explicitly granted is denied.
+2. **No unattested action** — no side effect runs without a successful `HORKOS`
+   attestation (attest-then-act).
 
-Already a pro? Just edit this README.md and make it your own. Want to make it easy? [Use the template at the bottom](#editing-this-readme)!
-
-## Add your files
-
-* [Create](https://docs.gitlab.com/user/project/repository/web_editor/#create-a-file) or [upload](https://docs.gitlab.com/user/project/repository/web_editor/#upload-a-file) files
-* [Add files using the command line](https://docs.gitlab.com/topics/git/add_files/#add-files-to-a-git-repository) or push an existing Git repository with the following command:
+## Architecture
 
 ```
-cd existing_repo
-git remote add origin https://gitlab.com/mthandazogegane/eidolon.git
-git branch -M main
-git push -uf origin main
+            Principal (human · root identity)
+               │ defines            │ mints
+               ▼                    ▼
+        ETHOS (fidelity)      THEMIS (authority)
+               └────────┬───────────┘
+                        ▼
+             KAIROS  (action gate)   ◀── BASANOS (autonomy ceiling)
+             act · draft · escalate
+                        ▼
+             HORKOS (attestation)
+                        ▼
+        SAGE  (consensus memory + attestation ledger)
 ```
 
-## Integrate with your tools
+| Component | Module | Responsibility |
+|-----------|--------|----------------|
+| **SAGE adapter** | `eidolon.sage` | The only path to SAGE. `SagePort` interface; live `SageClientAdapter` + in-memory fake. |
+| **ETHOS** | `eidolon.ethos` | Fidelity core. Hard-isolated **judgment** (auditable, LLM-free) and **style** (Claude) engines. |
+| **THEMIS** | `eidolon.themis` | Authority. Ed25519-signed, chained, attenuable delegation credentials (biscuit/macaroon lineage). |
+| **KAIROS** | `eidolon.kairos` | The single action gate. LOCKED resolution order; attest-then-act. |
+| **HORKOS** | `eidolon.horkos` | Immutable attestation on SAGE's consensus ledger. |
+| **BASANOS** | `eidolon.basanos` | Certification. Fidelity face + **integrity face** (adversarial suites) both gate the autonomy ceiling. |
+| **Capture** | `eidolon.capture` | Consent-gated ingestion of traces into SAGE. |
+| **Domain Profile** | `eidolon.profile` | Declarative pack specialising the fixed core. Ships `general-continuity`. |
 
-* [Set up project integrations](https://gitlab.com/mthandazogegane/eidolon/-/settings/integrations)
+### Notable design decisions (enhancements over the PRD, invariants preserved)
 
-## Collaborate with your team
+- **Ports & adapters around SAGE.** `SagePort` isolates the substrate; an
+  in-memory fake runs the whole system green offline, while the live
+  `SageClientAdapter` binds the real `sage_sdk` (verified against a Dockerized
+  node). Attestations map to consensus-committed memories (SAGE has no dedicated
+  attest API); a record's content hash is its ledger hash.
+- **Style/judgment isolation** is enforced two ways: an import-graph test proves
+  `ethos.judgment` never imports `ethos.style`, and a behavioral test proves
+  removing the style engine changes zero decisions.
+- **One canonical serializer** (`common.canonical`) is the single hashing source
+  of truth for THEMIS signing, ETHOS versioning, and HORKOS attestation.
 
-* [Invite team members and collaborators](https://docs.gitlab.com/user/project/members/)
-* [Create a new merge request](https://docs.gitlab.com/user/project/merge_requests/creating_merge_requests/)
-* [Automatically close issues from merge requests](https://docs.gitlab.com/user/project/issues/managing_issues/#closing-issues-automatically)
-* [Enable merge request approvals](https://docs.gitlab.com/user/project/merge_requests/approvals/)
-* [Set auto-merge](https://docs.gitlab.com/user/project/merge_requests/auto_merge/)
+## Quick start
 
-## Test and Deploy
+```bash
+uv sync --all-extras            # install (needs Python 3.12+ and uv)
 
-Use the built-in continuous integration in GitLab.
+# Fast lane — no external services. In-memory SAGE port.
+make test                       # unit + property tests
 
-* [Get started with GitLab CI/CD](https://docs.gitlab.com/ci/quick_start/)
-* [Analyze your code for known vulnerabilities with Static Application Security Testing (SAST)](https://docs.gitlab.com/user/application_security/sast/)
-* [Deploy to Kubernetes, Amazon EC2, or Amazon ECS using Auto Deploy](https://docs.gitlab.com/topics/autodevops/requirements/)
-* [Use pull-based deployments for improved Kubernetes management](https://docs.gitlab.com/user/clusters/agent/)
-* [Set up protected environments](https://docs.gitlab.com/ci/environments/protected_environments/)
+# Live lane — real SAGE consensus node via Docker.
+make up                         # starts ghcr.io/l33tdawg/sage on :8080
+make test-integration           # cross-principal isolation, attest→replay, full gate
 
-***
+# Run the API
+cp .env.example .env            # set EIDOLON_ANTHROPIC_API_KEY for Claude voice
+make run                        # uvicorn on :8000
+```
 
-# Editing this README
+The style engine (drafts/escalations) uses Claude (`claude-sonnet-4-6` by
+default). Without an API key it falls back to deterministic templates — **no
+judgment or authority decision ever depends on the LLM.**
 
-When you're ready to make this README your own, just edit this file and use the handy template below (or feel free to structure it however you want - this is just a starting point!). Thanks to [makeareadme.com](https://www.makeareadme.com/) for this template.
+## API surface
 
-## Suggestions for a good README
+`POST /keypair` · `POST /delegations/{mint,attenuate,revoke}` · `POST /heartbeat`
+· `POST /resolve` (the gate) · `GET /replay` · `POST /capture/ingest` ·
+`GET /profiles/{id}`. See `eidolon.api.app`.
 
-Every project is different, so consider which of these sections apply to yours. The sections used in the template are suggestions for most open source projects. Also keep in mind that while a README can be too long and detailed, too long is better than too short. If you think your README is too long, consider utilizing another form of documentation rather than cutting out information.
+## Status
 
-## Name
-Choose a self-explaining name for your project.
+The full PRD is implemented and tested (97 tests: unit + Hypothesis property
+tests + live-SAGE integration) — Phase 0 + Phase 1 plus every v2 item in §12.
 
-## Description
-Let people know what your project can do specifically. Provide context and add a link to any reference visitors might be unfamiliar with. A list of Features or a Background subsection can also be added here. If there are alternatives to your project, this is a good place to list differentiating factors.
+**v2:**
 
-## Badges
-On some READMEs, you may see small images that convey metadata, such as whether or not all the tests are passing for the project. You can use Shields to add some to your README. Many services also have instructions for adding a badge.
+- **Multi-connector capture** in `eidolon.capture` — a registry of consent-gated
+  source connectors (documents, messages, calendar, email, code) with per-source
+  normalizers; `ingest_all` captures several sources at once (each still requires
+  its own `ConsentGrant`), and `register_source` lets new profiles add sources.
+  Endpoints: `GET /capture/sources`, `POST /capture/ingest_multi`.
 
-## Visuals
-Depending on what you are making, it can be a good idea to include screenshots or even a video (you'll frequently see GIFs rather than actual videos). Tools like ttygif can help, but check out Asciinema for a more sophisticated method.
 
-## Installation
-Within a particular ecosystem, there may be a common way of installing things, such as using Yarn, NuGet, or Homebrew. However, consider the possibility that whoever is reading your README is a novice and would like more guidance. Listing specific steps helps remove ambiguity and gets people to using your project as quickly as possible. If it only runs in a specific context like a particular programming language version or operating system or has dependencies that have to be installed manually, also add a Requirements subsection.
+- **Aspirational-self / coaching layer** in `eidolon.coaching` — reads ETHOS
+  version diffs and the HORKOS attestation ledger, compares the twin's actual
+  behavior against a declared `Aspiration`, and returns advisory coaching notes
+  (under/over-escalation, acting on thin confidence, policy drift). **Fully
+  decoupled:** an import-graph test proves the decision path never imports it,
+  and a behavioral test proves running the coach changes zero decisions. It
+  writes nothing back to the operating model. Endpoint: `POST /coaching/report`.
 
-## Usage
-Use examples liberally, and show the expected output if you can. It's helpful to have inline the smallest example of usage that you can demonstrate, while providing links to more sophisticated examples if they are too long to reasonably include in the README.
 
-## Support
-Tell people where they can go to for help. It can be any combination of an issue tracker, a chat room, an email address, etc.
+- **Self-generated procedural skills** (Hermes-style) in `eidolon.skills` — the
+  twin learns a reusable plan from a completed session (`synthesize`), stores it
+  principal-scoped on SAGE (`SkillLibrary`), and replays it (`SkillExecutor`).
+  **Subordinate to ETHOS/THEMIS:** every replayed step is re-resolved through
+  KAIROS, so a skill learned under broad authority yields nothing it isn't
+  currently authorized for — verified by a "cannot smuggle authority" test.
+  Endpoints: `POST /skills`, `GET /skills`, `POST /skills/run`.
 
-## Roadmap
-If you have ideas for releases in the future, it is a good idea to list them in the README.
 
-## Contributing
-State if you are open to contributions and what your requirements are for accepting them.
+- **BASANOS integrity face** — adversarial suites (memory-poisoning, injection,
+  scope-evasion) in `eidolon.basanos.integrity`, an `IntegrityCertificate`, and
+  integrity gating of the autonomy ceiling (enable globally with
+  `EIDOLON_REQUIRE_INTEGRITY_CERTIFICATION=true`).
+- **`offensive-security` profile** — a governance-only red-teamer pack for an
+  authorized, time-boxed engagement in a **CTF/lab range** (§12). Per the
+  permanent non-goal (§2.3) it ships **no offensive capability** — it governs
+  authority over range-bound tools. Safe-by-construction: `lab_only`,
+  `authorization_required`, and `requires_integrity_certification` are set, so
+  KAIROS integrity-gates every acting decision even with the global flag off;
+  every impactful class (exploit/credential/lateral-movement/persistence)
+  always escalates and can never reach an unattended acting level; hard
+  exclusions deny out-of-scope targets, production, third parties, exfiltration,
+  destruction, and DoS.
 
-For people who want to make changes to your project, it's helpful to have some documentation on how to get started. Perhaps there is a script that they should run or some environment variables that they need to set. Make these steps explicit. These instructions could also be useful to your future self.
-
-You can also document commands to lint the code or run tests. These steps help to ensure high code quality and reduce the likelihood that the changes inadvertently break something. Having instructions for running tests is especially helpful if it requires external setup, such as starting a Selenium server for testing in a browser.
-
-## Authors and acknowledgment
-Show your appreciation to those who have contributed to the project.
+Every deferred item from PRD §12 is now built. Richer mandate selector types
+arrive naturally with each new profile (the manifest's `scope_selectors` is
+open-ended).
 
 ## License
-For open source projects, say how it is licensed.
 
-## Project status
-If you have run out of energy or time for your project, put a note at the top of the README saying that development has slowed down or stopped completely. Someone may choose to fork your project or volunteer to step in as a maintainer or owner, allowing your project to keep going. You can also make an explicit request for maintainers.
+Apache-2.0.

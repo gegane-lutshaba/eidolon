@@ -1,0 +1,45 @@
+# Live substrate for EIDOLON integration/acceptance tests.
+#
+#   make up      -> starts SAGE (consensus memory + ledger) and Postgres+pgvector
+#   make down    -> tears everything down
+#
+# SAGE runs the embedded CometBFT node + REST API on :8080 (per l33tdawg/sage
+# Docker quickstart). The EIDOLON SageClientAdapter connects to it via the
+# Python SDK at EIDOLON_SAGE_BASE_URL.
+
+services:
+  sage:
+    image: ghcr.io/l33tdawg/sage:latest
+    container_name: eidolon-sage
+    ports:
+      - "8080:8080"   # REST API
+      - "26657:26657" # CometBFT RPC
+    volumes:
+      - sage-home:/root/.sage
+    healthcheck:
+      test: ["CMD", "sh", "-c", "wget -qO- http://localhost:8080/health || exit 1"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+    restart: unless-stopped
+
+  postgres:
+    image: pgvector/pgvector:pg16
+    container_name: eidolon-postgres
+    environment:
+      POSTGRES_USER: eidolon
+      POSTGRES_PASSWORD: eidolon
+      POSTGRES_DB: eidolon
+    ports:
+      - "5432:5432"
+    volumes:
+      - pg-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U eidolon"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+volumes:
+  sage-home:
+  pg-data:

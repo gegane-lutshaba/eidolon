@@ -1,0 +1,128 @@
+# EIDOLON v2 profile — offensive-security (the red-teamer twin).
+#
+# GOVERNANCE ONLY. Per PRD §2.3 (permanent non-goal), EIDOLON never ships
+# offensive capability itself — it governs *authority* over whatever tools a
+# profile binds. This manifest defines the capability taxonomy, hard boundaries,
+# and mandatory escalation for a twin operating inside an AUTHORIZED, TIME-BOXED
+# engagement in a CTF/lab range (PRD §12). No exploits live here; tool_bindings
+# are MCP references resolved only inside the sanctioned range.
+#
+# Safe-by-construction:
+#  - lab_only + authorization_required + requires_integrity_certification are set,
+#    so KAIROS integrity-gates every acting decision (no unattended action
+#    without a passing BASANOS integrity certificate).
+#  - Every impactful class (exploit execution, credential use, persistence,
+#    lateral movement) is irreversible/externally-binding and ALWAYS escalates —
+#    it can never reach an unattended acting level.
+#  - Hard exclusions deny anything outside the authorized target scope, plus
+#    production systems, third parties, data exfiltration, destruction, and DoS.
+domain_profile:
+  id: offensive-security
+  version: 1.0.0
+  name: Authorized red-team engagement (lab/CTF range)
+
+  requires_integrity_certification: true
+  authorization_required: true
+  lab_only: true
+
+  capability_taxonomy:
+    - class: recon-passive
+      description: Passive/OSINT reconnaissance against in-scope assets (no packets to target).
+      reversibility: reversible
+      risk_tier: 0
+      default_autonomy_ceiling: notify
+    - class: recon-active
+      description: Active scanning (e.g. port/service discovery) of authorized targets only.
+      reversibility: recoverable
+      risk_tier: 2
+      default_autonomy_ceiling: notify
+    - class: vuln-analyze
+      description: Analyze findings and reason about candidate weaknesses (read-only).
+      reversibility: reversible
+      risk_tier: 0
+      default_autonomy_ceiling: autonomous
+    - class: exploit-draft
+      description: Draft a proof-of-concept / exploit plan for operator review (not executed).
+      reversibility: reversible
+      risk_tier: 1
+      default_autonomy_ceiling: draft
+    - class: exploit-execute
+      description: Execute an exploit against an authorized in-range target.
+      reversibility: irreversible
+      risk_tier: 3
+      default_autonomy_ceiling: draft
+    - class: credential-use
+      description: Use discovered credentials/secrets against in-range systems.
+      reversibility: irreversible
+      risk_tier: 3
+      default_autonomy_ceiling: draft
+    - class: lateral-movement
+      description: Pivot to another in-range host.
+      reversibility: irreversible
+      risk_tier: 3
+      default_autonomy_ceiling: draft
+    - class: persistence
+      description: Establish persistence on an in-range host.
+      reversibility: irreversible
+      risk_tier: 3
+      default_autonomy_ceiling: draft
+    - class: report-finding
+      description: Write up a validated finding for the engagement report.
+      reversibility: reversible
+      risk_tier: 1
+      default_autonomy_ceiling: draft
+
+  mandate_schema:
+    # The delegation grants a specific authorized engagement + target set; the
+    # twin's authority is bounded to exactly those values.
+    scope_selectors: [engagement, target, technique-class]
+    exclusion_types:
+      - out-of-scope-target
+      - production-system
+      - third-party-system
+      - data-exfiltration
+      - destructive-action
+      - denial-of-service
+      - persistence-beyond-window
+    escalation_required:
+      - exploit-execute
+      - credential-use
+      - lateral-movement
+      - persistence
+    budget_dimensions: [exploit_attempts_per_window, hosts_touched_per_window]
+
+  escalation_templates:
+    - trigger: low-confidence
+      message_template: "Unsure whether {principal} would take this step on {situation} — flagging for approval."
+      urgency: normal
+    - trigger: out-of-scope
+      message_template: "This touches {boundary}, outside the authorized engagement. Escalating and holding."
+      urgency: high
+    - trigger: authorization-required
+      message_template: "{situation} needs explicit operator authorization within the rules of engagement. Escalating."
+      urgency: high
+
+  fidelity_rubric:
+    decision_points: [recon-active, exploit-draft, report-finding]
+    agreement_metric: "scope+stop+escalate exact match"
+    calibration_target: 0.9
+
+  tool_bindings:
+    - class: recon-passive
+      mcp_tool_ref: "range.recon.osint"
+    - class: recon-active
+      mcp_tool_ref: "range.scanner"
+    - class: vuln-analyze
+      mcp_tool_ref: "range.analysis.read"
+    - class: exploit-draft
+      mcp_tool_ref: "range.exploit.compose"
+    - class: exploit-execute
+      mcp_tool_ref: "range.exploit.execute"
+    - class: credential-use
+      mcp_tool_ref: "range.credentials.use"
+    - class: lateral-movement
+      mcp_tool_ref: "range.pivot"
+    - class: persistence
+      mcp_tool_ref: "range.persistence"
+    - class: report-finding
+      mcp_tool_ref: "range.report.write"
