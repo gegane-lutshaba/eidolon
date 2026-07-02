@@ -99,6 +99,17 @@ class DomainProfile(BaseModel):
     ethos_extensions: list[str] = Field(default_factory=list)
     tool_bindings: list[ToolBinding] = Field(default_factory=list)
 
+    # -- safety governance flags (v2) ------------------------------------
+    # When true, this profile is integrity-gated by construction: no action
+    # class may reach an acting level without a passing BASANOS integrity
+    # certificate, regardless of the global config flag (PRD §2.2, §6.6).
+    requires_integrity_certification: bool = False
+    # When true, the twin must operate inside a declared authorized engagement
+    # (carried on the THEMIS delegation scope); anything outside is excluded.
+    authorization_required: bool = False
+    # When true, the profile is validated only in a CTF/lab range (PRD §12).
+    lab_only: bool = False
+
     # -- convenience accessors -------------------------------------------
     def class_names(self) -> set[str]:
         return {c.class_ for c in self.capability_taxonomy}

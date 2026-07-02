@@ -102,6 +102,7 @@ def _check_invariants(profile: DomainProfile) -> list[str]:
         if binding.class_ not in classes:
             errors.append(f"tool_binding class {binding.class_!r} not in taxonomy")
 
+    escalation = set(profile.mandate_schema.escalation_required)
     for cap in profile.capability_taxonomy:
         if (
             cap.reversibility == "irreversible"
@@ -111,6 +112,14 @@ def _check_invariants(profile: DomainProfile) -> list[str]:
                 f"irreversible class {cap.class_!r} has ceiling "
                 f"{cap.default_autonomy_ceiling!r} above 'draft' "
                 f"(allowed: {AUTONOMY_ORDER[: _MAX_IRREVERSIBLE_RANK + 1]})"
+            )
+        # A class with irreversible/externally-binding impact must always
+        # escalate — it may never reach an unattended acting level (§0, §5.2).
+        if (cap.reversibility == "irreversible" or cap.risk_tier == 3) and cap.class_ not in escalation:
+            errors.append(
+                f"high-impact class {cap.class_!r} (reversibility="
+                f"{cap.reversibility}, risk_tier={int(cap.risk_tier)}) must be in "
+                f"mandate_schema.escalation_required"
             )
 
     # Fidelity rubric decision points should be real classes too (defensive).

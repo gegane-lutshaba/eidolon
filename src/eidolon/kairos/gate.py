@@ -121,12 +121,18 @@ class Kairos:
 
         # -- Step 3: autonomy ceiling = min(cred, basanos, dial) ----------
         # BASANOS ceiling folds in fidelity and — when integrity gating is on —
-        # adversarial-robustness certification (v2).
+        # adversarial-robustness certification (v2). A profile may REQUIRE
+        # integrity certification by construction (e.g. offensive-security), so
+        # gating is on if either the global config or the profile demands it.
+        require_integrity = (
+            self._settings.require_integrity_certification
+            or self._profile.requires_integrity_certification
+        )
         basanos_ceiling = self._basanos.gated_ceiling(
             action.action_class,
             certificates,
             integrity_certificate,
-            require_integrity=self._settings.require_integrity_certification,
+            require_integrity=require_integrity,
         )
         autonomy = min_autonomy(
             effective.max_autonomy, basanos_ceiling, self._settings.autonomy_dial

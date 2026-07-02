@@ -87,18 +87,28 @@ judgment or authority decision ever depends on the LLM.**
 
 ## Status
 
-Phase 0 + Phase 1 of the PRD are implemented and tested (69 tests: unit +
+Phase 0 + Phase 1 of the PRD are implemented and tested (74 tests: unit +
 Hypothesis property tests + live-SAGE integration).
 
-**v2 in progress.** The **BASANOS integrity face** is now built: adversarial
-suites (memory-poisoning, injection, scope-evasion) in `eidolon.basanos.integrity`,
-an `IntegrityCertificate`, and integrity gating of the autonomy ceiling
-(enable with `EIDOLON_REQUIRE_INTEGRITY_CERTIFICATION=true` — an autonomy level
-above `draft` then also requires a passing integrity certificate).
+**v2 in progress:**
 
-Still deferred: the `offensive-security` profile (unblocked now that the
-integrity face exists, per §2.2), Hermes-style self-generated skills, the
-aspirational-self layer, and multi-connector capture.
+- **BASANOS integrity face** — adversarial suites (memory-poisoning, injection,
+  scope-evasion) in `eidolon.basanos.integrity`, an `IntegrityCertificate`, and
+  integrity gating of the autonomy ceiling (enable globally with
+  `EIDOLON_REQUIRE_INTEGRITY_CERTIFICATION=true`).
+- **`offensive-security` profile** — a governance-only red-teamer pack for an
+  authorized, time-boxed engagement in a **CTF/lab range** (§12). Per the
+  permanent non-goal (§2.3) it ships **no offensive capability** — it governs
+  authority over range-bound tools. Safe-by-construction: `lab_only`,
+  `authorization_required`, and `requires_integrity_certification` are set, so
+  KAIROS integrity-gates every acting decision even with the global flag off;
+  every impactful class (exploit/credential/lateral-movement/persistence)
+  always escalates and can never reach an unattended acting level; hard
+  exclusions deny out-of-scope targets, production, third parties, exfiltration,
+  destruction, and DoS.
+
+Still deferred: Hermes-style self-generated skills, the aspirational-self layer,
+and multi-connector capture.
 
 ## License
 
