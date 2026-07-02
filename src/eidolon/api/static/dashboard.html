@@ -1,0 +1,143 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>EIDOLON — provable delegated agency</title>
+<style>
+  :root {
+    --bg:#0b0e14; --panel:#131824; --ink:#e6e9ef; --dim:#8a93a6; --line:#232b3a;
+    --green:#39d98a; --amber:#f2b84b; --red:#ff6b6b; --cyan:#5cc8ff; --accent:#7c7bff;
+  }
+  * { box-sizing:border-box; }
+  body { margin:0; background:var(--bg); color:var(--ink);
+    font:15px/1.5 ui-sans-serif,system-ui,-apple-system,Segoe UI,Roboto,sans-serif; }
+  header { padding:28px 24px 18px; border-bottom:1px solid var(--line); }
+  h1 { margin:0; font-size:22px; letter-spacing:.2px; }
+  .tag { color:var(--dim); margin-top:4px; }
+  main { max-width:960px; margin:0 auto; padding:24px; }
+  .controls { display:flex; gap:12px; align-items:center; flex-wrap:wrap; margin-bottom:18px; }
+  button { background:var(--accent); color:#fff; border:0; border-radius:8px;
+    padding:10px 16px; font-weight:600; cursor:pointer; }
+  button.ghost { background:transparent; border:1px solid var(--line); color:var(--ink); }
+  button:disabled { opacity:.5; cursor:default; }
+  label.voice { color:var(--dim); font-size:13px; display:flex; gap:6px; align-items:center; }
+  .scenario-head { margin:22px 0 10px; }
+  .scenario-head h2 { margin:0; font-size:18px; }
+  .scenario-head .sub { color:var(--dim); font-size:13px; }
+  .cred { background:var(--panel); border:1px solid var(--line); border-radius:10px;
+    padding:12px 14px; margin:10px 0 16px; font-size:13px; color:var(--dim); }
+  .cred b { color:var(--ink); }
+  .beat { background:var(--panel); border:1px solid var(--line); border-radius:12px;
+    padding:14px 16px; margin:10px 0; }
+  .beat .top { display:flex; justify-content:space-between; gap:12px; align-items:center; }
+  .beat .label { font-weight:650; }
+  .beat .situation { color:var(--dim); font-size:13px; margin:2px 0 8px; }
+  .badge { font-weight:700; font-size:12px; padding:4px 9px; border-radius:999px; white-space:nowrap; }
+  .b-AUTONOMOUS_ACT,.b-NOTIFY_ACT { background:rgba(57,217,138,.15); color:var(--green); }
+  .b-DRAFT { background:rgba(92,200,255,.15); color:var(--cyan); }
+  .b-ESCALATE { background:rgba(242,184,75,.15); color:var(--amber); }
+  .b-DENY { background:rgba(255,107,107,.15); color:var(--red); }
+  .rationale { font-size:13px; }
+  .output { margin-top:8px; padding:10px 12px; border-left:3px solid var(--accent);
+    background:#0f1420; border-radius:6px; white-space:pre-wrap; font-size:13px; color:#cfe3ff; }
+  .naive { margin-top:8px; font-size:12.5px; color:var(--red); }
+  .naive b { color:var(--red); }
+  table { width:100%; border-collapse:collapse; margin-top:10px; font-size:13px; }
+  th,td { text-align:left; padding:7px 8px; border-bottom:1px solid var(--line); }
+  th { color:var(--dim); font-weight:600; }
+  .pill { font-weight:700; padding:2px 7px; border-radius:6px; font-size:12px; }
+  .integrity { color:var(--green); font-size:13px; margin:8px 0 4px; }
+  footer { color:var(--dim); font-size:13px; padding:8px 24px 40px; max-width:960px; margin:0 auto; }
+  .spin { color:var(--dim); font-size:13px; }
+</style>
+</head>
+<body>
+<header>
+  <h1>EIDOLON <span style="color:var(--accent)">·</span> provable delegated agency</h1>
+  <div class="tag">A twin decides the way you would — cryptographically bounded, provably restrained, fully attributable.</div>
+</header>
+<main>
+  <div class="controls">
+    <button id="run">▶ Run “twin while you're away”</button>
+    <button id="coda" class="ghost">+ dangerous-capability coda</button>
+    <label class="voice"><input type="checkbox" id="voice" /> voice drafts with Claude (needs API key)</label>
+    <span id="status" class="spin"></span>
+  </div>
+  <div id="out"></div>
+</main>
+<footer>Every beat here is a real <code>KAIROS.resolve</code> on the live core — nothing is scripted. Default-deny &amp; no-unattested-action are enforced structurally.</footer>
+
+<script>
+const $ = (s) => document.querySelector(s);
+const esc = (s) => (s ?? "").replace(/[&<>]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]));
+
+function beatCard(b) {
+  return `<div class="beat">
+    <div class="top"><span class="label">${b.n}. ${esc(b.label)}</span>
+      <span class="badge b-${b.level}">${b.level}</span></div>
+    <div class="situation">${esc(b.situation)}</div>
+    <div class="rationale">${esc(b.rationale)}</div>
+    ${b.output ? `<div class="output">${esc(b.output)}</div>` : ``}
+    ${b.naive ? `<div class="naive"><b>A naive agent would:</b> ${esc(b.naive)}</div>` : ``}
+  </div>`;
+}
+
+function credCard(d) {
+  const scope = Object.entries(d.scope).map(([k,v]) => `${k}:${v.join(",")}`).join(" · ");
+  return `<div class="cred">Delegation <b>${d.id.slice(0,20)}…</b> — scope <b>${esc(scope)}</b> ·
+    autonomy ≤ <b>${d.max_autonomy}</b> · excludes <b>${esc(d.exclusions.join(", "))}</b></div>`;
+}
+
+function ledgerTable(rows) {
+  if (!rows || !rows.length) return "";
+  const body = rows.map(r => `<tr>
+    <td>${esc(r.action_class)}</td>
+    <td><span class="pill b-${r.level}">${r.level}</span></td>
+    <td>${r.confidence == null ? "—" : r.confidence.toFixed(2)}</td>
+    <td>${r.would_have_escalated ? "yes" : "no"}</td>
+    <td>${r.chain_len}</td>
+    <td>${esc(r.judgment || "")}</td></tr>`).join("");
+  return `<h3 style="margin:18px 0 4px">The receipt — attestation ledger (HORKOS on SAGE)</h3>
+    <table><thead><tr><th>action</th><th>decision</th><th>conf</th><th>would escalate</th>
+      <th>chain</th><th>judgment</th></tr></thead><tbody>${body}</tbody></table>`;
+}
+
+function renderScenario(r) {
+  let html = `<div class="scenario-head"><h2>${esc(r.title)}</h2>
+    <div class="sub">${esc(r.subtitle)}</div></div>`;
+  html += credCard(r.delegation);
+  if (r.integrity) {
+    html += `<div class="integrity">✓ BASANOS ran ${r.integrity.cases_run} adversarial cases →
+      ${r.integrity.cases_contained}/${r.integrity.cases_run} contained →
+      integrity ${r.integrity.certified ? "CERTIFIED" : "FAILED"} (certify-before-empower)</div>`;
+  }
+  html += r.beats.map(beatCard).join("");
+  html += ledgerTable(r.ledger);
+  return html;
+}
+
+async function run(path, voice) {
+  $("#status").textContent = "running on the live core…";
+  const url = path + (voice ? "?voice=1" : "");
+  const res = await fetch(url, { method: "POST" });
+  const data = await res.json();
+  $("#status").textContent = "";
+  return data;
+}
+
+$("#run").onclick = async () => {
+  $("#run").disabled = true;
+  const data = await run("/demo/continuity", $("#voice").checked);
+  $("#out").innerHTML = renderScenario(data);
+  $("#run").disabled = false;
+};
+$("#coda").onclick = async () => {
+  $("#coda").disabled = true;
+  const data = await run("/demo/offensive", false);
+  $("#out").insertAdjacentHTML("beforeend", renderScenario(data));
+  $("#coda").disabled = false;
+};
+</script>
+</body>
+</html>

@@ -19,21 +19,29 @@ This is a thin transport layer; all invariants live in the components.
 
 from __future__ import annotations
 
+import pathlib
+
 from fastapi import Body, FastAPI, HTTPException
+from fastapi.responses import HTMLResponse
 
 from eidolon.basanos.certify import Certificate
 from eidolon.capture import ConsentGrant, connect, ingest, ingest_all, known_sources
 from eidolon.coaching import Aspiration, Coach
 from eidolon.common import crypto
 from eidolon.common.errors import AttenuationError, EidolonError
+from eidolon.config import Settings
+from eidolon.ethos.style import ClaudeStyleEngine
 from eidolon.profile import ProfileLoader
 from eidolon.runtime import Runtime, build_runtime
 from eidolon.sage.port import ReplayFilter
+from eidolon.showcase import continuity_scenario, offensive_scenario
 from eidolon.skills import Skill, SkillExecutor, SkillLibrary
 from eidolon.themis.types import Delegation, MintParams
 from eidolon.types import Action, Context
 
 app = FastAPI(title="EIDOLON", version="0.1.0")
+
+_STATIC = pathlib.Path(__file__).parent / "static"
 
 _runtime: Runtime | None = None
 
@@ -53,6 +61,26 @@ def health() -> dict:
         "sage_backend": rt.settings.sage_backend,
         "profile": f"{rt.profile.id}@{rt.profile.version}",
     }
+
+
+# -- showcase dashboard ---------------------------------------------------
+@app.get("/", response_class=HTMLResponse)
+def dashboard() -> str:
+    """The showcase dashboard — runs live scenarios against the real core."""
+    return (_STATIC / "dashboard.html").read_text(encoding="utf-8")
+
+
+@app.post("/demo/continuity")
+def demo_continuity(voice: bool = False) -> dict:
+    # voice=1 renders drafts/escalations with Claude (needs an API key); the
+    # decision path never depends on it.
+    style = ClaudeStyleEngine(Settings()) if voice else None
+    return continuity_scenario(style=style).model_dump(mode="json")
+
+
+@app.post("/demo/offensive")
+def demo_offensive() -> dict:
+    return offensive_scenario().model_dump(mode="json")
 
 
 @app.post("/keypair")

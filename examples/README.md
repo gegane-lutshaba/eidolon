@@ -42,3 +42,32 @@ Today's agents are either over-permissioned (unsafe) or locked down (useless).
 The demo shows EIDOLON as the missing layer: delegate **real authority**,
 **cryptographically bounded**, **provably restrained**, and **fully
 attributable** — so you can finally let an agent act on your behalf.
+
+A captured run is in [`../docs/demo-transcript.txt`](../docs/demo-transcript.txt)
+(regenerate with `make transcript`).
+
+## Web dashboard
+
+The same scenarios, in the browser:
+
+```bash
+make dashboard          # or: uv run uvicorn eidolon.api.app:app --port 8000
+# open http://localhost:8000
+```
+
+Click **Run** to execute the continuity scenario against the live core (each beat
+is a real `KAIROS.resolve`), then **+ dangerous-capability coda**. Endpoints:
+`GET /` (page), `POST /demo/continuity` (`?voice=1` for Claude-voiced drafts),
+`POST /demo/offensive`.
+
+## Recording an animated version
+
+The CLI demo makes a great asciinema cast / GIF for the README:
+
+```bash
+asciinema rec eidolon.cast -c "uv run python examples/continuity_demo.py"
+# then convert to an animated SVG (nice in Markdown, no external hosting):
+npx svg-term-cli --in eidolon.cast --out docs/demo.svg --window
+```
+
+Embed with `![EIDOLON demo](docs/demo.svg)`.

@@ -33,6 +33,18 @@ typecheck:
 run:
 	uv run uvicorn eidolon.api.app:app --host $${EIDOLON_API_HOST:-127.0.0.1} --port $${EIDOLON_API_PORT:-8000} --reload
 
+# Narrated CLI showcase (in-memory SAGE; no node needed).
+demo:
+	uv run python examples/continuity_demo.py
+
+# Web dashboard — open http://localhost:8000 after it starts.
+dashboard:
+	uv run uvicorn eidolon.api.app:app --host 127.0.0.1 --port 8000
+
+# Regenerate the committed transcript (deterministic voice).
+transcript:
+	EIDOLON_ANTHROPIC_API_KEY= NO_COLOR=1 uv run python examples/continuity_demo.py > docs/demo-transcript.txt
+
 clean:
 	rm -rf .pytest_cache .ruff_cache .mypy_cache dist build
 	find . -type d -name __pycache__ -exec rm -rf {} +
