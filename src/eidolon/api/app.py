@@ -12,6 +12,7 @@ Endpoints map directly onto the component interfaces:
     POST /skills                 -> SkillLibrary.save
     GET  /skills                 -> SkillLibrary.load (relevant)
     POST /skills/run             -> SkillExecutor.run (subordinate to KAIROS)
+    POST /coaching/report        -> Coach.coach (read-only, decoupled)
 
 This is a thin transport layer; all invariants live in the components.
 """
@@ -23,6 +24,7 @@ from fastapi import Body, FastAPI, HTTPException
 from eidolon.basanos.certify import Certificate
 from eidolon.capture import ConsentGrant, ingest
 from eidolon.capture.connector import connect
+from eidolon.coaching import Aspiration, Coach
 from eidolon.common import crypto
 from eidolon.common.errors import AttenuationError, EidolonError
 from eidolon.profile import ProfileLoader
@@ -166,3 +168,13 @@ def run_skill(
     except EidolonError as exc:
         raise HTTPException(status_code=409, detail=str(exc)) from exc
     return run.model_dump(mode="json")
+
+
+@app.post("/coaching/report")
+def coaching_report(aspiration: Aspiration = Body(...)) -> dict:
+    # Read-only + decoupled: reads the attestation ledger, never writes back to
+    # the operating model.
+    rt = runtime()
+    attestations = rt.horkos.replay(ReplayFilter(principal_id=aspiration.principal_id, limit=5000))
+    report = Coach().coach(aspiration, attestations)
+    return report.model_dump(mode="json")

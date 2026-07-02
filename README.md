@@ -87,10 +87,19 @@ judgment or authority decision ever depends on the LLM.**
 
 ## Status
 
-Phase 0 + Phase 1 of the PRD are implemented and tested (81 tests: unit +
+Phase 0 + Phase 1 of the PRD are implemented and tested (88 tests: unit +
 Hypothesis property tests + live-SAGE integration).
 
 **v2 in progress:**
+
+- **Aspirational-self / coaching layer** in `eidolon.coaching` — reads ETHOS
+  version diffs and the HORKOS attestation ledger, compares the twin's actual
+  behavior against a declared `Aspiration`, and returns advisory coaching notes
+  (under/over-escalation, acting on thin confidence, policy drift). **Fully
+  decoupled:** an import-graph test proves the decision path never imports it,
+  and a behavioral test proves running the coach changes zero decisions. It
+  writes nothing back to the operating model. Endpoint: `POST /coaching/report`.
+
 
 - **Self-generated procedural skills** (Hermes-style) in `eidolon.skills` — the
   twin learns a reusable plan from a completed session (`synthesize`), stores it
@@ -116,7 +125,8 @@ Hypothesis property tests + live-SAGE integration).
   exclusions deny out-of-scope targets, production, third parties, exfiltration,
   destruction, and DoS.
 
-Still deferred: the aspirational-self / coaching layer and multi-connector capture.
+Still deferred: multi-connector capture (v1 ships one connector; richer mandate
+selector types arrive with new profiles).
 
 ## License
 
