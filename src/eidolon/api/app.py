@@ -22,8 +22,7 @@ from __future__ import annotations
 from fastapi import Body, FastAPI, HTTPException
 
 from eidolon.basanos.certify import Certificate
-from eidolon.capture import ConsentGrant, ingest
-from eidolon.capture.connector import connect
+from eidolon.capture import ConsentGrant, connect, ingest, ingest_all, known_sources
 from eidolon.coaching import Aspiration, Coach
 from eidolon.common import crypto
 from eidolon.common.errors import AttenuationError, EidolonError
@@ -128,6 +127,27 @@ def capture_ingest(
     connector = connect(consent.source, consent, lambda: records)
     mem_ids = ingest(runtime().sage, connector)
     return {"ingested": mem_ids}
+
+
+@app.get("/capture/sources")
+def capture_sources() -> dict:
+    return {"sources": known_sources()}
+
+
+@app.post("/capture/ingest_multi")
+def capture_ingest_multi(
+    batches: list[dict] = Body(...),  # [{consent: ConsentGrant, records: [...]}]
+) -> dict:
+    # Build one consent-gated connector per source, then ingest them together.
+    connectors = []
+    for batch in batches:
+        consent = ConsentGrant.model_validate(batch["consent"])
+        records = batch.get("records", [])
+        try:
+            connectors.append(connect(consent.source, consent, lambda r=records: r))
+        except EidolonError as exc:
+            raise HTTPException(status_code=409, detail=str(exc)) from exc
+    return {"ingested": ingest_all(runtime().sage, connectors)}
 
 
 @app.get("/profiles/{profile_id}")

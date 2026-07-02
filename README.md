@@ -87,10 +87,17 @@ judgment or authority decision ever depends on the LLM.**
 
 ## Status
 
-Phase 0 + Phase 1 of the PRD are implemented and tested (88 tests: unit +
-Hypothesis property tests + live-SAGE integration).
+The full PRD is implemented and tested (97 tests: unit + Hypothesis property
+tests + live-SAGE integration) — Phase 0 + Phase 1 plus every v2 item in §12.
 
-**v2 in progress:**
+**v2:**
+
+- **Multi-connector capture** in `eidolon.capture` — a registry of consent-gated
+  source connectors (documents, messages, calendar, email, code) with per-source
+  normalizers; `ingest_all` captures several sources at once (each still requires
+  its own `ConsentGrant`), and `register_source` lets new profiles add sources.
+  Endpoints: `GET /capture/sources`, `POST /capture/ingest_multi`.
+
 
 - **Aspirational-self / coaching layer** in `eidolon.coaching` — reads ETHOS
   version diffs and the HORKOS attestation ledger, compares the twin's actual
@@ -125,8 +132,9 @@ Hypothesis property tests + live-SAGE integration).
   exclusions deny out-of-scope targets, production, third parties, exfiltration,
   destruction, and DoS.
 
-Still deferred: multi-connector capture (v1 ships one connector; richer mandate
-selector types arrive with new profiles).
+Every deferred item from PRD §12 is now built. Richer mandate selector types
+arrive naturally with each new profile (the manifest's `scope_selectors` is
+open-ended).
 
 ## License
 

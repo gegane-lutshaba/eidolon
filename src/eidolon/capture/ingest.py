@@ -23,3 +23,15 @@ def ingest(sage: SagePort, connector: Connector) -> list[str]:
         )
         mem_ids.append(mem_id)
     return mem_ids
+
+
+def ingest_all(sage: SagePort, connectors: list[Connector]) -> dict[str, list[str]]:
+    """Ingest from multiple connectors, each already consent-gated.
+
+    Returns per-source mem_ids. Every connector was constructed against its own
+    ConsentGrant, so multi-source capture never bypasses consent.
+    """
+    result: dict[str, list[str]] = {}
+    for connector in connectors:
+        result[connector.source] = ingest(sage, connector)
+    return result
