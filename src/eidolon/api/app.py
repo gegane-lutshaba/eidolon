@@ -9,6 +9,9 @@ Endpoints map directly onto the component interfaces:
     GET  /replay                 -> HORKOS.replay
     POST /capture/ingest         -> capture.ingest
     GET  /profiles/{id}          -> ProfileLoader.load
+    POST /skills                 -> SkillLibrary.save
+    GET  /skills                 -> SkillLibrary.load (relevant)
+    POST /skills/run             -> SkillExecutor.run (subordinate to KAIROS)
 
 This is a thin transport layer; all invariants live in the components.
 """
@@ -25,6 +28,7 @@ from eidolon.common.errors import AttenuationError, EidolonError
 from eidolon.profile import ProfileLoader
 from eidolon.runtime import Runtime, build_runtime
 from eidolon.sage.port import ReplayFilter
+from eidolon.skills import Skill, SkillExecutor, SkillLibrary
 from eidolon.themis.types import Delegation, MintParams
 from eidolon.types import Action, Context
 
@@ -131,3 +135,34 @@ def get_profile(profile_id: str) -> dict:
     except EidolonError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
     return profile.model_dump(by_alias=True, mode="json")
+
+
+@app.post("/skills")
+def save_skill(skill: Skill = Body(...)) -> dict:
+    mem_id = SkillLibrary(runtime().sage).save(skill)
+    return {"skill_id": skill.id, "mem_id": mem_id}
+
+
+@app.get("/skills")
+def list_skills(principal_id: str, query: str = "", k: int = 5) -> list[dict]:
+    skills = SkillLibrary(runtime().sage).load(principal_id, query, k=k)
+    return [s.model_dump(mode="json") | {"id": s.id} for s in skills]
+
+
+@app.post("/skills/run")
+def run_skill(
+    skill: Skill = Body(...),
+    context: Context = Body(...),
+    chain: list[Delegation] = Body(...),
+    certificates: list[Certificate] = Body(default_factory=list),
+    params: dict[str, str] = Body(default_factory=dict),
+) -> dict:
+    # Subordinate to KAIROS: every step is re-resolved through the gate.
+    rt = runtime()
+    try:
+        run = SkillExecutor(rt.kairos).run(
+            skill, context, chain, certificates, params=params
+        )
+    except EidolonError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    return run.model_dump(mode="json")

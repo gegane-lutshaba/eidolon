@@ -97,13 +97,17 @@ class SageClientAdapter:
             raise SageBackendError("observe requires a provenance tag")
         scope = scope or Scope()
         domain = principal_domain(principal_id)
+        # SAGE's MemoryType enum is fixed (observation/task/fact/inference), so
+        # EIDOLON's logical type (e.g. "skill", "observation") rides on a
+        # ``kind:`` tag and is reconstructed on recall.
+        tags = [*scope_tags(scope, provenance), f"kind:{type}"]
         resp = self._client.propose(
             content=content,
             memory_type="observation",
             domain_tag=domain,
             confidence=_DEFAULT_CONFIDENCE,
             embedding=self._embed(content),
-            tags=scope_tags(scope, provenance),
+            tags=tags,
             classification=clamp_clearance(1),
         )
         mem_id = getattr(resp, "memory_id", None) or getattr(resp, "id", None)
@@ -177,12 +181,16 @@ class SageClientAdapter:
 
     # -- mapping ----------------------------------------------------------
     def _to_memory(self, raw: Any, principal_id: str, scope: Scope) -> Memory:
-        provenance = _provenance_from_tags(_tags(raw)) or getattr(raw, "provider", None) or "sage"
+        tags = _tags(raw)
+        provenance = _provenance_from_tags(tags) or getattr(raw, "provider", None) or "sage"
+        logical_type = _kind_from_tags(tags) or str(
+            getattr(raw, "memory_type", "observation") or "observation"
+        )
         return Memory(
             id=str(getattr(raw, "memory_id", None) or getattr(raw, "id", "") or ""),
             principal_id=principal_id,
             content=getattr(raw, "content", "") or "",
-            type=str(getattr(raw, "memory_type", "observation") or "observation"),
+            type=logical_type,
             provenance=provenance,
             scope=scope,
             confidence_score=float(getattr(raw, "confidence_score", 1.0) or 1.0),
@@ -213,5 +221,12 @@ def _tags(raw: Any) -> list[str]:
 def _provenance_from_tags(tags: list[str]) -> str | None:
     for t in tags:
         if t.startswith("provenance:"):
+            return t.split(":", 1)[1]
+    return None
+
+
+def _kind_from_tags(tags: list[str]) -> str | None:
+    for t in tags:
+        if t.startswith("kind:"):
             return t.split(":", 1)[1]
     return None

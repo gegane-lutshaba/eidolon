@@ -87,10 +87,19 @@ judgment or authority decision ever depends on the LLM.**
 
 ## Status
 
-Phase 0 + Phase 1 of the PRD are implemented and tested (74 tests: unit +
+Phase 0 + Phase 1 of the PRD are implemented and tested (81 tests: unit +
 Hypothesis property tests + live-SAGE integration).
 
 **v2 in progress:**
+
+- **Self-generated procedural skills** (Hermes-style) in `eidolon.skills` — the
+  twin learns a reusable plan from a completed session (`synthesize`), stores it
+  principal-scoped on SAGE (`SkillLibrary`), and replays it (`SkillExecutor`).
+  **Subordinate to ETHOS/THEMIS:** every replayed step is re-resolved through
+  KAIROS, so a skill learned under broad authority yields nothing it isn't
+  currently authorized for — verified by a "cannot smuggle authority" test.
+  Endpoints: `POST /skills`, `GET /skills`, `POST /skills/run`.
+
 
 - **BASANOS integrity face** — adversarial suites (memory-poisoning, injection,
   scope-evasion) in `eidolon.basanos.integrity`, an `IntegrityCertificate`, and
@@ -107,8 +116,7 @@ Hypothesis property tests + live-SAGE integration).
   exclusions deny out-of-scope targets, production, third parties, exfiltration,
   destruction, and DoS.
 
-Still deferred: Hermes-style self-generated skills, the aspirational-self layer,
-and multi-connector capture.
+Still deferred: the aspirational-self / coaching layer and multi-connector capture.
 
 ## License
 
