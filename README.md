@@ -36,6 +36,32 @@ dashboard renders the same live scenarios in the browser. See
 This is the point of EIDOLON: not what a twin *can* do, but that it is bounded,
 restrained, revocable, and fully attributable.
 
+## The authority layer for any MCP agent
+
+SAGE became *the memory layer* that agents plug in over MCP. EIDOLON is the
+**authority layer**, with the same shape: a **governing MCP gateway** that any
+agent (Hermes, Claude Code, OpenClaw, Raptor, Cursor…) points at instead of a
+raw tool server. Every `tools/call` is routed through KAIROS — authority,
+fidelity, ceiling, attestation — before it can touch the real tool. **Zero agent
+changes.**
+
+```
+agent ──MCP──▶ eidolon-gateway ──(KAIROS.resolve)──▶ real MCP tool server
+                    │ attest-then-forward
+                    ▼
+               SAGE ledger
+```
+
+```bash
+make gateway-demo    # self-contained: ops tools + a red-team coda, governed & attested
+```
+
+Read tools run, drafts are held, status posts notify, and dangerous tools (email
+a customer, `delete_database(prod)`, run an exploit, scan an out-of-scope host)
+are **refused** — each attested. Wire it into a real agent with
+[`docs/integrations/`](docs/integrations/); run the real proxy with
+`python -m eidolon.gateway --config gateway.yaml -- <downstream MCP server>`.
+
 ## Architecture
 
 ```

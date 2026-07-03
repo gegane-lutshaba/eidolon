@@ -1,4 +1,4 @@
-.PHONY: install up down test test-integration lint fmt typecheck run clean
+.PHONY: install up down test test-integration lint fmt typecheck run demo dashboard transcript gateway-demo clean
 
 install:
 	uv sync --all-extras
@@ -44,6 +44,10 @@ dashboard:
 # Regenerate the committed transcript (deterministic voice).
 transcript:
 	EIDOLON_ANTHROPIC_API_KEY= NO_COLOR=1 uv run python examples/continuity_demo.py > docs/demo-transcript.txt
+
+# Governing MCP gateway showcase — the authority layer for MCP agents.
+gateway-demo:
+	uv run python examples/mcp_gateway_demo.py
 
 clean:
 	rm -rf .pytest_cache .ruff_cache .mypy_cache dist build
