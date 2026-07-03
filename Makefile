@@ -1,4 +1,4 @@
-.PHONY: install up down test test-integration lint fmt typecheck run gateway-demo clean
+.PHONY: install up down test test-integration lint fmt typecheck run demo dashboard transcript gateway-demo clean
 
 install:
 	uv sync --all-extras
@@ -32,6 +32,18 @@ typecheck:
 
 run:
 	uv run uvicorn eidolon.api.app:app --host $${EIDOLON_API_HOST:-127.0.0.1} --port $${EIDOLON_API_PORT:-8000} --reload
+
+# Narrated CLI showcase (in-memory SAGE; no node needed).
+demo:
+	uv run python examples/continuity_demo.py
+
+# Web dashboard — open http://localhost:8000 after it starts.
+dashboard:
+	uv run uvicorn eidolon.api.app:app --host 127.0.0.1 --port 8000
+
+# Regenerate the committed transcript (deterministic voice).
+transcript:
+	EIDOLON_ANTHROPIC_API_KEY= NO_COLOR=1 uv run python examples/continuity_demo.py > docs/demo-transcript.txt
 
 # Governing MCP gateway showcase — the authority layer for MCP agents.
 gateway-demo:

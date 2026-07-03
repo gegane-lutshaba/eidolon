@@ -1,0 +1,78 @@
+# EIDOLON CI — real gating so MRs can auto-merge only on green.
+#
+# NOTE: GitLab.com free-tier accounts must VERIFY the account (add a payment
+# method / phone) before shared runners will execute any CI jobs. Until then
+# pipelines are created but fail with zero jobs. This config itself is valid
+# (`glab ci lint`).
+#
+# Fast lane (lint + unit) is required and needs no external services. The
+# integration lane spins up a live SAGE node as a service and is allow_failure
+# (shared-runner SAGE startup can be slow/flaky) — informative, never blocking.
+
+stages: [test]
+
+# Run merge-request pipelines and branch pipelines, but never both at once
+# (avoids duplicate/empty pipelines).
+workflow:
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
+    - if: '$CI_COMMIT_BRANCH && $CI_OPEN_MERGE_REQUESTS'
+      when: never
+    - if: '$CI_COMMIT_BRANCH'
+    - if: '$CI_COMMIT_TAG'
+
+# Jobs must be eligible in MR pipelines too (rules-less jobs are branch/tag only).
+.rules: &rules
+  - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
+  - if: '$CI_COMMIT_BRANCH'
+  - if: '$CI_COMMIT_TAG'
+
+default:
+  image: ghcr.io/astral-sh/uv:python3.12-bookworm-slim
+  cache:
+    key: "uv-$CI_COMMIT_REF_SLUG"
+    paths: [.uv-cache]
+  before_script:
+    - export UV_CACHE_DIR="$CI_PROJECT_DIR/.uv-cache"
+    - uv sync --group dev
+
+variables:
+  UV_CACHE_DIR: "$CI_PROJECT_DIR/.uv-cache"
+
+lint:
+  stage: test
+  rules: *rules
+  script:
+    - uv run ruff check src tests examples
+
+unit:
+  stage: test
+  rules: *rules
+  script:
+    - uv run pytest -m "not integration" --junitxml=report.xml
+  artifacts:
+    when: always
+    reports:
+      junit: report.xml
+
+integration:
+  stage: test
+  rules: *rules
+  services:
+    - name: ghcr.io/l33tdawg/sage:latest
+      alias: sage
+  variables:
+    EIDOLON_SAGE_BACKEND: "sage"
+    EIDOLON_SAGE_BASE_URL: "http://sage:8080"
+    EIDOLON_STYLE_ENABLED: "false"
+  before_script:
+    - export UV_CACHE_DIR="$CI_PROJECT_DIR/.uv-cache"
+    - uv sync --group dev --extra sage
+    - echo "Waiting for SAGE to become reachable..."
+    - >-
+      until uv run python -c "import httpx,sys;
+      sys.exit(0 if httpx.get('http://sage:8080/health', timeout=2).status_code < 500 else 1)" 2>/dev/null;
+      do sleep 2; done
+  script:
+    - uv run pytest -m integration
+  allow_failure: true

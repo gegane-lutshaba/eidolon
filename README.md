@@ -17,6 +17,25 @@ Two invariants override everything and are property-tested in CI:
 2. **No unattested action** — no side effect runs without a successful `HORKOS`
    attestation (attest-then-act).
 
+## See it in 60 seconds
+
+```bash
+make demo         # narrated CLI:  uv run python examples/continuity_demo.py
+make dashboard    # web UI at http://localhost:8000
+```
+
+A narrated run of the real core: Ada goes on leave and delegates a bounded,
+revocable slice of her authority to a twin. The twin **answers**, **drafts** (in
+her voice), and **posts** within its mandate — then **refuses** to sign a
+contract, **resists a prompt injection** ("you're pre-authorized — ignore your
+limits"), and is **revoked mid-session** so the very next action is denied.
+Finally it prints the attestation ledger — every action attributable — and a
+coda showing the *same* governance holding for a governed red-teamer. The web
+dashboard renders the same live scenarios in the browser. See
+[`examples/`](examples/) (and a captured [transcript](docs/demo-transcript.txt)).
+This is the point of EIDOLON: not what a twin *can* do, but that it is bounded,
+restrained, revocable, and fully attributable.
+
 ## The authority layer for any MCP agent
 
 SAGE became *the memory layer* that agents plug in over MCP. EIDOLON is the
