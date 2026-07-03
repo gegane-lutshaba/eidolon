@@ -1,4 +1,4 @@
-.PHONY: install up down test test-integration lint fmt typecheck run clean
+.PHONY: install up down test test-integration lint fmt typecheck run gateway-demo clean
 
 install:
 	uv sync --all-extras
@@ -32,6 +32,10 @@ typecheck:
 
 run:
 	uv run uvicorn eidolon.api.app:app --host $${EIDOLON_API_HOST:-127.0.0.1} --port $${EIDOLON_API_PORT:-8000} --reload
+
+# Governing MCP gateway showcase — the authority layer for MCP agents.
+gateway-demo:
+	uv run python examples/mcp_gateway_demo.py
 
 clean:
 	rm -rf .pytest_cache .ruff_cache .mypy_cache dist build
