@@ -1,0 +1,32 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1080 1080" font-family="Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif">
+  <defs><linearGradient id="g" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#0d1220"/><stop offset="1" stop-color="#090b11"/></linearGradient></defs>
+  <rect width="1080" height="1080" fill="url(#g)"/>
+  <rect x="0" y="0" width="1080" height="6" fill="#7c7bff"/>
+  <text x="80" y="130" fill="#8a93a6" font-size="24" font-weight="700" letter-spacing="2">THE IDEA</text>
+  <text x="80" y="228" fill="#e6e9ef" font-size="58" font-weight="800">Delegate a bounded slice</text>
+  <text x="80" y="296" fill="#e6e9ef" font-size="58" font-weight="800">of your authority.</text>
+
+  <g font-size="30">
+    <circle cx="98" cy="404" r="7" fill="#7c7bff"/>
+    <text x="128" y="414" fill="#e6e9ef" font-weight="700">Fidelity &amp; authority are separate.</text>
+    <text x="128" y="454" fill="#8a93a6" font-size="27">“Would you act?” and “is the twin permitted?” both must pass.</text>
+
+    <circle cx="98" cy="524" r="7" fill="#39d98a"/>
+    <text x="128" y="534" fill="#e6e9ef" font-weight="700">Authority only attenuates, never widens.</text>
+    <text x="128" y="574" fill="#8a93a6" font-size="27">Signed, chained credentials — a twin can't exceed you.</text>
+
+    <circle cx="98" cy="644" r="7" fill="#f2b84b"/>
+    <text x="128" y="654" fill="#e6e9ef" font-weight="700">Restraint is the product.</text>
+    <text x="128" y="694" fill="#8a93a6" font-size="27">It escalates when unsure or out of scope — and hands back.</text>
+
+    <circle cx="98" cy="764" r="7" fill="#5cc8ff"/>
+    <text x="128" y="774" fill="#e6e9ef" font-weight="700">Every action is attributable.</text>
+    <text x="128" y="814" fill="#8a93a6" font-size="27">Attested on a consensus ledger — the whole session replays.</text>
+  </g>
+
+  <text x="80" y="920" fill="#e6e9ef" font-size="34" font-weight="800">Revocable. Cryptographic. Auditable.</text>
+  <text x="80" y="966" fill="#8a93a6" font-size="28">Pull the authority back mid-session; the next action is denied.</text>
+
+  <text x="80" y="1030" fill="#5b6478" font-size="22">3 / 6</text>
+  <text x="1000" y="1030" text-anchor="end" fill="#5b6478" font-size="22">EIDOLON</text>
+</svg>

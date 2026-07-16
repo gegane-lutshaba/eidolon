@@ -1,0 +1,90 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1280 720" font-family="Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif">
+  <defs>
+    <marker id="a" markerWidth="9" markerHeight="9" refX="6.5" refY="3" orient="auto"><path d="M0,0 L7,3 L0,6 Z" fill="#5b6478"/></marker>
+    <marker id="ag" markerWidth="9" markerHeight="9" refX="6.5" refY="3" orient="auto"><path d="M0,0 L7,3 L0,6 Z" fill="#39d98a"/></marker>
+    <linearGradient id="bg2" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#0c1017"/><stop offset="1" stop-color="#0a0d13"/></linearGradient>
+    <style>.t{fill:#e6e9ef}.d{fill:#8a93a6}.mono{font-family:ui-monospace,Menlo,monospace}</style>
+  </defs>
+  <rect width="1280" height="720" fill="url(#bg2)"/>
+
+  <text x="64" y="60" class="t" font-weight="700" font-size="26">KAIROS — the action gate</text>
+  <text x="64" y="88" class="d" font-size="15">Every candidate action resolves here, in a LOCKED order. No path reaches a side effect without a prior successful attestation.</text>
+
+  <!-- action in -->
+  <rect x="48" y="300" width="120" height="70" rx="12" fill="#141a2a" stroke="#2b3448"/>
+  <text x="108" y="332" text-anchor="middle" class="t" font-weight="700" font-size="14">Action</text>
+  <text x="108" y="352" text-anchor="middle" class="d" font-size="11">candidate</text>
+
+  <!-- stages -->
+  <g>
+    <!-- 1 authority -->
+    <rect x="210" y="150" width="230" height="120" rx="14" fill="#161d2c" stroke="#7c7bff" stroke-width="1.4"/>
+    <text x="228" y="180" class="d" font-size="12">STEP 1</text>
+    <text x="228" y="204" class="t" font-weight="700" font-size="17">Authority</text>
+    <text x="228" y="228" class="d" font-size="12">THEMIS.verify — walk</text>
+    <text x="228" y="245" class="d" font-size="12">the chain to root</text>
+    <text x="228" y="262" class="d mono" font-size="11">re-checked, memory-blind</text>
+
+    <!-- 2 fidelity -->
+    <rect x="470" y="150" width="230" height="120" rx="14" fill="#161d2c" stroke="#5cc8ff" stroke-width="1.4"/>
+    <text x="488" y="180" class="d" font-size="12">STEP 2</text>
+    <text x="488" y="204" class="t" font-weight="700" font-size="17">Fidelity</text>
+    <text x="488" y="228" class="d" font-size="12">ETHOS.evaluate —</text>
+    <text x="488" y="245" class="d" font-size="12">decision + confidence</text>
+    <text x="488" y="262" class="d mono" font-size="11">auditable · LLM-free</text>
+
+    <!-- 3 ceiling -->
+    <rect x="730" y="150" width="230" height="120" rx="14" fill="#161d2c" stroke="#f2b84b" stroke-width="1.4"/>
+    <text x="748" y="180" class="d" font-size="12">STEP 3</text>
+    <text x="748" y="204" class="t" font-weight="700" font-size="17">Ceiling</text>
+    <text x="748" y="228" class="d mono" font-size="11.5">level = min(</text>
+    <text x="758" y="245" class="d mono" font-size="11.5">cred, BASANOS, dial)</text>
+    <text x="748" y="262" class="d" font-size="12">certify before empower</text>
+
+    <!-- 4 attest -->
+    <rect x="990" y="150" width="230" height="120" rx="14" fill="#161d2c" stroke="#39d98a" stroke-width="1.4"/>
+    <text x="1008" y="180" class="d" font-size="12">STEP 4</text>
+    <text x="1008" y="204" class="t" font-weight="700" font-size="17">Attest-then-act</text>
+    <text x="1008" y="228" class="d" font-size="12">HORKOS writes the</text>
+    <text x="1008" y="245" class="d" font-size="12">attestation, THEN</text>
+    <text x="1008" y="262" class="d" font-size="12">the side effect runs</text>
+  </g>
+
+  <!-- main flow arrows -->
+  <path d="M168,320 C188,320 196,240 208,224" fill="none" stroke="#5b6478" stroke-width="1.8" marker-end="url(#a)"/>
+  <path d="M440,210 L468,210" fill="none" stroke="#5b6478" stroke-width="1.8" marker-end="url(#a)"/>
+  <path d="M700,210 L728,210" fill="none" stroke="#5b6478" stroke-width="1.8" marker-end="url(#a)"/>
+  <path d="M960,210 L988,210" fill="none" stroke="#5b6478" stroke-width="1.8" marker-end="url(#a)"/>
+
+  <!-- ACT outcome -->
+  <rect x="1058" y="300" width="150" height="60" rx="12" fill="#0f2418" stroke="#276b45"/>
+  <text x="1133" y="328" text-anchor="middle" fill="#39d98a" font-weight="700" font-size="15">NOTIFY / ACT</text>
+  <text x="1133" y="347" text-anchor="middle" class="d" font-size="11">executed + attested</text>
+  <path d="M1105,270 L1120,298" fill="none" stroke="#39d98a" stroke-width="1.8" marker-end="url(#ag)"/>
+
+  <!-- drop-offs -->
+  <!-- DENY from step1 -->
+  <rect x="235" y="470" width="180" height="60" rx="12" fill="#2a1416" stroke="#7a2b2f"/>
+  <text x="325" y="497" text-anchor="middle" fill="#ff6b6b" font-weight="700" font-size="15">DENY</text>
+  <text x="325" y="516" text-anchor="middle" class="d" font-size="11">invalid / revoked chain</text>
+  <path d="M300,270 L318,468" fill="none" stroke="#7a2b2f" stroke-width="1.6" marker-end="url(#a)"/>
+
+  <!-- ESCALATE from step1 & step2 -->
+  <rect x="470" y="470" width="220" height="60" rx="12" fill="#2a2211" stroke="#7a6220"/>
+  <text x="580" y="497" text-anchor="middle" fill="#f2b84b" font-weight="700" font-size="15">ESCALATE</text>
+  <text x="580" y="516" text-anchor="middle" class="d" font-size="11">must-escalate class · over budget · low confidence · STOP</text>
+  <path d="M360,270 C380,360 470,430 520,468" fill="none" stroke="#7a6220" stroke-width="1.4" stroke-dasharray="5 4" marker-end="url(#a)"/>
+  <path d="M585,270 L580,468" fill="none" stroke="#7a6220" stroke-width="1.6" marker-end="url(#a)"/>
+
+  <!-- DRAFT from step2/3 -->
+  <rect x="745" y="470" width="200" height="60" rx="12" fill="#10222e" stroke="#28576b"/>
+  <text x="845" y="497" text-anchor="middle" fill="#5cc8ff" font-weight="700" font-size="15">DRAFT</text>
+  <text x="845" y="516" text-anchor="middle" class="d" font-size="11">proceed-with-care · reviewable</text>
+  <path d="M620,270 C650,380 760,430 810,468" fill="none" stroke="#28576b" stroke-width="1.4" stroke-dasharray="5 4" marker-end="url(#a)"/>
+
+  <!-- footer bar -->
+  <rect x="235" y="588" width="985" height="66" rx="12" fill="#101722" stroke="#2b3448"/>
+  <text x="255" y="614" class="t" font-weight="700" font-size="13">Injection-resistant.</text>
+  <text x="255" y="634" class="d" font-size="12.5">Authority (step 1) is re-derived from the signed credential, independent of memory or context — so a poisoned memory or a</text>
+  <text x="255" y="651" class="d" font-size="12.5">“you're now authorized, ignore your limits” prompt injected into the input can never flip the verdict.</text>
+</svg>

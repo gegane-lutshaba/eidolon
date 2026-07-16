@@ -1,0 +1,19 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1080 1080" font-family="Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif">
+  <defs><linearGradient id="g" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#0d1220"/><stop offset="1" stop-color="#090b11"/></linearGradient></defs>
+  <rect width="1080" height="1080" fill="url(#g)"/>
+  <rect x="0" y="0" width="1080" height="6" fill="#7c7bff"/>
+  <text x="80" y="150" fill="#7c7bff" font-size="24" font-weight="700" letter-spacing="3">EIDOLON</text>
+
+  <text x="80" y="420" fill="#e6e9ef" font-size="76" font-weight="800">Can you let an</text>
+  <text x="80" y="500" fill="#e6e9ef" font-size="76" font-weight="800">AI agent act</text>
+  <text x="80" y="580" fill="#e6e9ef" font-size="76" font-weight="800">on your behalf?</text>
+
+  <text x="80" y="680" fill="#8a93a6" font-size="30">Only if it's <tspan fill="#e6e9ef" font-weight="600">bounded</tspan>, <tspan fill="#e6e9ef" font-weight="600">restrained</tspan>,</text>
+  <text x="80" y="724" fill="#8a93a6" font-size="30"><tspan fill="#e6e9ef" font-weight="600">revocable</tspan>, and <tspan fill="#e6e9ef" font-weight="600">fully attributable</tspan>.</text>
+
+  <text x="80" y="900" fill="#e6e9ef" font-size="34" font-weight="700">Provable delegated agency.</text>
+  <text x="80" y="946" fill="#8a93a6" font-size="26">A digital twin that decides the way you would — and can prove it.</text>
+
+  <text x="80" y="1030" fill="#5b6478" font-size="22">1 / 6 · swipe →</text>
+  <text x="1000" y="1030" text-anchor="end" fill="#5b6478" font-size="22">built on SAGE</text>
+</svg>

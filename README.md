@@ -17,6 +17,9 @@ Two invariants override everything and are property-tested in CI:
 2. **No unattested action** — no side effect runs without a successful `HORKOS`
    attestation (attest-then-act).
 
+📄 **White paper:** [`docs/whitepaper.md`](docs/whitepaper.md) · **Diagrams &
+social kit:** [`docs/visuals/`](docs/visuals/) · [`docs/linkedin-post.md`](docs/linkedin-post.md)
+
 ## See it in 60 seconds
 
 ```bash

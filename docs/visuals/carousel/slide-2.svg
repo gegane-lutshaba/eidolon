@@ -1,0 +1,32 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1080 1080" font-family="Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif">
+  <defs><linearGradient id="g" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#0d1220"/><stop offset="1" stop-color="#090b11"/></linearGradient></defs>
+  <rect width="1080" height="1080" fill="url(#g)"/>
+  <rect x="0" y="0" width="1080" height="6" fill="#7c7bff"/>
+  <text x="80" y="130" fill="#8a93a6" font-size="24" font-weight="700" letter-spacing="2">THE PROBLEM</text>
+  <text x="80" y="230" fill="#e6e9ef" font-size="60" font-weight="800">Today's agents pick</text>
+  <text x="80" y="300" fill="#e6e9ef" font-size="60" font-weight="800">one bad option.</text>
+
+  <rect x="80" y="380" width="410" height="360" rx="20" fill="#1a1220" stroke="#7a2b2f"/>
+  <text x="120" y="450" fill="#ff6b6b" font-size="40" font-weight="800">Over-</text>
+  <text x="120" y="500" fill="#ff6b6b" font-size="40" font-weight="800">permissioned</text>
+  <text x="120" y="560" fill="#c9ced9" font-size="27">Give it your tools and</text>
+  <text x="120" y="596" fill="#c9ced9" font-size="27">hope. One bad call —</text>
+  <text x="120" y="632" fill="#c9ced9" font-size="27">a wrong email, a</text>
+  <text x="120" y="668" fill="#c9ced9" font-size="27">deleted database.</text>
+  <text x="120" y="712" fill="#ff6b6b" font-size="26" font-weight="700">= unsafe</text>
+
+  <rect x="590" y="380" width="410" height="360" rx="20" fill="#101a22" stroke="#28576b"/>
+  <text x="630" y="450" fill="#5cc8ff" font-size="40" font-weight="800">Locked</text>
+  <text x="630" y="500" fill="#5cc8ff" font-size="40" font-weight="800">down</text>
+  <text x="630" y="560" fill="#c9ced9" font-size="27">Approve every step.</text>
+  <text x="630" y="596" fill="#c9ced9" font-size="27">The human is the</text>
+  <text x="630" y="632" fill="#c9ced9" font-size="27">bottleneck again —</text>
+  <text x="630" y="668" fill="#c9ced9" font-size="27">no leverage.</text>
+  <text x="630" y="712" fill="#5cc8ff" font-size="26" font-weight="700">= useless</text>
+
+  <text x="80" y="850" fill="#e6e9ef" font-size="40" font-weight="800">The missing piece isn't a smarter model.</text>
+  <text x="80" y="908" fill="#8a93a6" font-size="32">It's a <tspan fill="#7c7bff" font-weight="700">governance layer</tspan> for authority.</text>
+
+  <text x="80" y="1030" fill="#5b6478" font-size="22">2 / 6</text>
+  <text x="1000" y="1030" text-anchor="end" fill="#5b6478" font-size="22">EIDOLON</text>
+</svg>

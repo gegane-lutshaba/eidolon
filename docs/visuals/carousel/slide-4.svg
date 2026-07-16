@@ -1,0 +1,37 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1080 1080" font-family="Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif">
+  <defs><linearGradient id="g" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#0d1220"/><stop offset="1" stop-color="#090b11"/></linearGradient></defs>
+  <rect width="1080" height="1080" fill="url(#g)"/>
+  <rect x="0" y="0" width="1080" height="6" fill="#7c7bff"/>
+  <text x="80" y="130" fill="#8a93a6" font-size="24" font-weight="700" letter-spacing="2">THE GATE</text>
+  <text x="80" y="228" fill="#e6e9ef" font-size="60" font-weight="800">One choke point.</text>
+  <text x="80" y="298" fill="#e6e9ef" font-size="60" font-weight="800">Five honest outcomes.</text>
+  <text x="80" y="356" fill="#8a93a6" font-size="27">Every candidate action resolves through KAIROS, in a locked order.</text>
+
+  <g>
+    <rect x="80" y="410" width="920" height="86" rx="14" fill="#1a1216" stroke="#7a2b2f"/>
+    <text x="112" y="463" fill="#ff6b6b" font-size="34" font-weight="800">DENY</text>
+    <text x="360" y="460" fill="#c9ced9" font-size="27">not authorized — invalid or revoked credential</text>
+
+    <rect x="80" y="510" width="920" height="86" rx="14" fill="#1a1710" stroke="#7a6220"/>
+    <text x="112" y="563" fill="#f2b84b" font-size="34" font-weight="800">ESCALATE</text>
+    <text x="360" y="560" fill="#c9ced9" font-size="27">out of scope, low confidence — hand back to you</text>
+
+    <rect x="80" y="610" width="920" height="86" rx="14" fill="#101a22" stroke="#28576b"/>
+    <text x="112" y="663" fill="#5cc8ff" font-size="34" font-weight="800">DRAFT</text>
+    <text x="360" y="660" fill="#c9ced9" font-size="27">prepared in your voice — held for approval</text>
+
+    <rect x="80" y="710" width="920" height="86" rx="14" fill="#0f1c14" stroke="#276b45"/>
+    <text x="112" y="763" fill="#39d98a" font-size="34" font-weight="800">NOTIFY</text>
+    <text x="360" y="760" fill="#c9ced9" font-size="27">recoverable action — done, you're informed</text>
+
+    <rect x="80" y="810" width="920" height="86" rx="14" fill="#0f1c14" stroke="#276b45"/>
+    <text x="112" y="863" fill="#39d98a" font-size="34" font-weight="800">ACT</text>
+    <text x="360" y="860" fill="#c9ced9" font-size="27">fully authorized — executed autonomously</text>
+  </g>
+
+  <text x="80" y="960" fill="#e6e9ef" font-size="28" font-weight="700">Attest-then-act:</text>
+  <text x="290" y="960" fill="#8a93a6" font-size="28">no side effect without a prior attestation.</text>
+
+  <text x="80" y="1030" fill="#5b6478" font-size="22">4 / 6</text>
+  <text x="1000" y="1030" text-anchor="end" fill="#5b6478" font-size="22">EIDOLON</text>
+</svg>

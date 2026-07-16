@@ -1,0 +1,107 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1280 820" font-family="Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif">
+  <defs>
+    <marker id="arw" markerWidth="10" markerHeight="10" refX="7" refY="3" orient="auto" markerUnits="strokeWidth">
+      <path d="M0,0 L7,3 L0,6 Z" fill="#5b6478"/>
+    </marker>
+    <marker id="arwA" markerWidth="10" markerHeight="10" refX="7" refY="3" orient="auto" markerUnits="strokeWidth">
+      <path d="M0,0 L7,3 L0,6 Z" fill="#7c7bff"/>
+    </marker>
+    <linearGradient id="bg" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#0c1017"/><stop offset="1" stop-color="#0a0d13"/>
+    </linearGradient>
+    <style>
+      .t{fill:#e6e9ef} .d{fill:#8a93a6} .mono{font-family:ui-monospace,SFMono-Regular,Menlo,monospace}
+      .h{font-weight:700} .box{rx:14}
+    </style>
+  </defs>
+
+  <rect width="1280" height="820" fill="url(#bg)"/>
+
+  <!-- Title -->
+  <text x="64" y="66" class="t h" font-size="30">EIDOLON</text>
+  <text x="200" y="66" class="d" font-size="18">· provable delegated agency for faithful digital twins</text>
+  <text x="64" y="94" class="d" font-size="14.5">A twin that decides the way you would — cryptographically bounded, provably restrained, fully attributable. Built on SAGE.</text>
+
+  <!-- Principal -->
+  <rect x="470" y="126" width="340" height="58" rx="14" fill="#141a2a" stroke="#2b3448"/>
+  <text x="640" y="152" text-anchor="middle" class="t h" font-size="17">PRINCIPAL</text>
+  <text x="640" y="172" text-anchor="middle" class="d" font-size="12.5">human · root identity · Ed25519</text>
+
+  <text x="452" y="214" text-anchor="end" class="d" font-size="12">defines</text>
+  <text x="828" y="214" class="d" font-size="12">mints</text>
+  <path d="M560,184 C540,204 470,206 452,224" fill="none" stroke="#5b6478" stroke-width="1.6" marker-end="url(#arw)"/>
+  <path d="M720,184 C742,204 812,206 828,224" fill="none" stroke="#5b6478" stroke-width="1.6" marker-end="url(#arw)"/>
+
+  <!-- ETHOS -->
+  <rect x="150" y="230" width="360" height="118" rx="14" fill="#131a26" stroke="#2b3448"/>
+  <circle cx="182" cy="262" r="6" fill="#5cc8ff"/>
+  <text x="200" y="267" class="t h" font-size="18">ETHOS — fidelity</text>
+  <text x="174" y="296" class="d" font-size="13">“would the principal act?” · two hard-isolated engines</text>
+  <text x="174" y="317" class="d" font-size="12.5">· judgment (auditable, LLM-free) → decides</text>
+  <text x="174" y="335" class="d" font-size="12.5">· style (Claude) → voices drafts, never decisions</text>
+
+  <!-- THEMIS -->
+  <rect x="770" y="230" width="360" height="118" rx="14" fill="#131a26" stroke="#2b3448"/>
+  <circle cx="802" cy="262" r="6" fill="#7c7bff"/>
+  <text x="820" y="267" class="t h" font-size="18">THEMIS — authority</text>
+  <text x="794" y="296" class="d" font-size="13">“is the twin permitted?” · delegation credentials</text>
+  <text x="794" y="317" class="d" font-size="12.5">· Ed25519-signed, chained, attenuable (subset-only)</text>
+  <text x="794" y="335" class="d" font-size="12.5">· revocable · dead-man's-switch</text>
+
+  <path d="M330,348 C330,378 560,380 610,404" fill="none" stroke="#5b6478" stroke-width="1.6" marker-end="url(#arw)"/>
+  <path d="M950,348 C950,378 720,380 670,404" fill="none" stroke="#5b6478" stroke-width="1.6" marker-end="url(#arw)"/>
+
+  <!-- KAIROS -->
+  <rect x="360" y="410" width="560" height="150" rx="16" fill="#161d2c" stroke="#7c7bff" stroke-width="1.5"/>
+  <text x="640" y="444" text-anchor="middle" class="t h" font-size="20">KAIROS — the action gate</text>
+  <text x="640" y="468" text-anchor="middle" class="d" font-size="12.5">the single choke point · LOCKED order · attest-then-act</text>
+  <!-- outcome badges -->
+  <g font-size="12.5" font-weight="700" text-anchor="middle">
+    <rect x="386" y="486" width="92" height="30" rx="8" fill="#2a1416" stroke="#7a2b2f"/><text x="432" y="506" fill="#ff6b6b">DENY</text>
+    <rect x="486" y="486" width="112" height="30" rx="8" fill="#2a2211" stroke="#7a6220"/><text x="542" y="506" fill="#f2b84b">ESCALATE</text>
+    <rect x="606" y="486" width="92" height="30" rx="8" fill="#10222e" stroke="#28576b"/><text x="652" y="506" fill="#5cc8ff">DRAFT</text>
+    <rect x="706" y="486" width="102" height="30" rx="8" fill="#0f2418" stroke="#276b45"/><text x="757" y="506" fill="#39d98a">NOTIFY</text>
+    <rect x="816" y="486" width="82" height="30" rx="8" fill="#0f2418" stroke="#276b45"/><text x="857" y="506" fill="#39d98a">ACT</text>
+  </g>
+  <text x="640" y="540" text-anchor="middle" class="d" font-size="11.5">no side effect without a prior successful attestation · injected memory/context never flips the authority verdict</text>
+
+  <!-- BASANOS side -->
+  <rect x="962" y="416" width="256" height="90" rx="14" fill="#131a26" stroke="#2b3448"/>
+  <circle cx="990" cy="446" r="6" fill="#f2b84b"/>
+  <text x="1006" y="451" class="t h" font-size="16">BASANOS</text>
+  <text x="982" y="474" class="d" font-size="12">certification → autonomy ceiling</text>
+  <text x="982" y="492" class="d" font-size="12">fidelity + adversarial integrity</text>
+  <path d="M962,470 L924,478" fill="none" stroke="#5b6478" stroke-width="1.6" marker-end="url(#arw)"/>
+  <text x="936" y="466" class="d" font-size="11" text-anchor="end">ceiling</text>
+
+  <!-- escalate back to principal -->
+  <path d="M542,486 C542,300 470,240 610,190" fill="none" stroke="#3a4257" stroke-width="1.3" stroke-dasharray="4 4" marker-end="url(#arw)"/>
+
+  <!-- HORKOS -->
+  <rect x="470" y="596" width="340" height="56" rx="14" fill="#131a26" stroke="#2b3448"/>
+  <circle cx="500" cy="624" r="6" fill="#39d98a"/>
+  <text x="516" y="629" class="t h" font-size="16">HORKOS — attestation</text>
+  <path d="M640,560 L640,594" fill="none" stroke="#7c7bff" stroke-width="1.8" marker-end="url(#arwA)"/>
+
+  <!-- SAGE -->
+  <rect x="410" y="690" width="460" height="70" rx="14" fill="#101722" stroke="#2b3448"/>
+  <text x="640" y="722" text-anchor="middle" class="t h" font-size="17">SAGE</text>
+  <text x="640" y="744" text-anchor="middle" class="d" font-size="12.5">consensus memory + attestation ledger (BFT · content-hashed · tamper-evident)</text>
+  <path d="M640,652 L640,688" fill="none" stroke="#5b6478" stroke-width="1.6" marker-end="url(#arw)"/>
+
+  <!-- Domain Profile injected -->
+  <rect x="64" y="470" width="230" height="150" rx="14" fill="#12161f" stroke="#2b3448" stroke-dasharray="5 4"/>
+  <text x="80" y="500" class="t h" font-size="15">Domain Profile</text>
+  <text x="80" y="524" class="d" font-size="11.5">declarative pack that</text>
+  <text x="80" y="541" class="d" font-size="11.5">specialises the fixed core:</text>
+  <text x="80" y="562" class="d" font-size="11.5">· capability taxonomy</text>
+  <text x="80" y="579" class="d" font-size="11.5">· mandate + exclusions</text>
+  <text x="80" y="596" class="d" font-size="11.5">· fidelity rubric</text>
+  <text x="80" y="613" class="d" font-size="11.5">ships general-continuity,</text>
+  <text x="80" y="630" class="d" font-size="11.5" fill="#8a93a6">offensive-security</text>
+  <path d="M294,520 C340,520 360,470 372,452" fill="none" stroke="#3a4257" stroke-width="1.3" stroke-dasharray="4 4" marker-end="url(#arw)"/>
+  <text x="316" y="505" class="d" font-size="10.5">injected →</text>
+
+  <!-- invariants footer -->
+  <text x="64" y="792" class="d" font-size="12.5"><tspan class="t h">Two invariants:</tspan>  1) default-deny — any authority not explicitly granted is denied.   2) no unattested action — attest before any side effect.</text>
+</svg>
