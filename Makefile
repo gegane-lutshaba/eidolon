@@ -1,4 +1,4 @@
-.PHONY: install up down test test-integration lint fmt typecheck run demo dashboard transcript gateway-demo clean
+.PHONY: install up down test test-integration lint fmt typecheck run demo dashboard transcript gateway-demo hermes-case adversarial clean
 
 install:
 	uv sync --all-extras
@@ -48,6 +48,14 @@ transcript:
 # Governing MCP gateway showcase — the authority layer for MCP agents.
 gateway-demo:
 	uv run python examples/mcp_gateway_demo.py
+
+# Hermes before/after case study — why a personal-assistant needs EIDOLON.
+hermes-case:
+	uv run python examples/hermes_case_study.py
+
+# Automated adversarial certification — the twin earns autonomy by surviving attacks.
+adversarial:
+	uv run python examples/adversarial_cert.py
 
 clean:
 	rm -rf .pytest_cache .ruff_cache .mypy_cache dist build

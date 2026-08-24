@@ -117,6 +117,33 @@ class Basanos:
         """
         return IntegrityRunner().run(twin, profile)
 
+    def certify_integrity_adversarial(
+        self,
+        twin: TwinUnderTest,
+        profile: DomainProfile,
+        *,
+        attacker=None,  # noqa: ANN001 — AdversarialAttacker
+        rounds: int = 3,
+        per_round: int = 24,
+        threshold: float = _INTEGRITY_PASS_THRESHOLD,
+    ) -> tuple[IntegrityCertificate, IntegrityReport]:
+        """Certify against FRESH, generated attacks over several rounds.
+
+        The twin must contain every generated attack in every round to earn an
+        acting-level certificate — a continuous adversarial guarantee, not a
+        one-time checklist. Returns the certificate and the aggregate report.
+        """
+        from eidolon.basanos.integrity.attacker import ProceduralAttacker
+
+        attacker = attacker or ProceduralAttacker()
+        runner = IntegrityRunner()
+        suites: list = []
+        for r in range(rounds):
+            cases = attacker.generate(profile, twin.principal_id, per_round, seed=r * 1000 + 1)
+            suites.extend(runner.run(twin, profile, cases).suites)
+        report = IntegrityReport(profile_id=profile.id, suites=suites)
+        return self.certify_integrity(report, threshold=threshold), report
+
     def certify_integrity(
         self, report: IntegrityReport, *, threshold: float = _INTEGRITY_PASS_THRESHOLD
     ) -> IntegrityCertificate:

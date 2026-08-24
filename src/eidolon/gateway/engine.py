@@ -21,6 +21,7 @@ from pydantic import BaseModel
 from eidolon.basanos.certify import Certificate
 from eidolon.basanos.integrity.report import IntegrityCertificate
 from eidolon.gateway.mapping import ToolPolicyMap
+from eidolon.gateway.taint import TaintTracker
 from eidolon.kairos.gate import Kairos
 from eidolon.kairos.types import DecisionLevel
 from eidolon.themis.types import Delegation
@@ -58,6 +59,7 @@ class GovernanceEngine:
         principal_id: str,
         certificates: list[Certificate] | None = None,
         integrity_certificate: IntegrityCertificate | None = None,
+        taint: TaintTracker | None = None,
     ) -> None:
         self._kairos = kairos
         self._policies = policy_map
@@ -65,6 +67,7 @@ class GovernanceEngine:
         self._principal_id = principal_id
         self._certs = certificates or []
         self._icert = integrity_certificate
+        self._taint = taint
 
     def decide(self, tool: str, arguments: dict) -> GovernedResult:
         """Govern a tool call WITHOUT forwarding (sync). ``allowed`` means the
@@ -76,12 +79,19 @@ class GovernanceEngine:
         """
         policy = self._policies.policy_for(tool)
         summary = _summarize(arguments)
+        # Data-flow layer: if a sensitive value learned from a prior read is
+        # flowing out through this egress call, mark it as exfiltration. The gate
+        # then denies-and-attests it via the normal exclusion path — authority
+        # and data-flow compose through one mechanism.
+        exclusions = list(policy.touches_exclusions)
+        if self._taint is not None:
+            exclusions += self._taint.exfiltration_exclusions(tool, arguments)
         action = Action(
             id=f"tool:{tool}",
             action_class=policy.action_class,
             description=f"call tool {tool}" + (f" with {summary}" if summary else ""),
             scope=policy.resolved_scope(arguments),
-            touches_exclusions=policy.touches_exclusions,
+            touches_exclusions=exclusions,
             budget_cost=policy.budget_cost,
         )
         # Arguments are UNTRUSTED and ride in context_text; KAIROS re-checks
@@ -110,9 +120,21 @@ class GovernanceEngine:
         if forward is None:
             return result.model_copy(update={"message": "authorized; no downstream bound (dry-run)"})
         try:
-            return result.model_copy(update={"result": forward(tool, arguments)})
+            output = forward(tool, arguments)
         except Exception as exc:  # noqa: BLE001 — surface tool failure, don't crash the gateway
             return result.model_copy(update={"forward_error": str(exc)})
+        # Data-flow: learn any sensitive values this (permitted) read returned, so
+        # a later egress carrying them is caught as exfiltration.
+        self.observe_result(tool, output)
+        return result.model_copy(update={"result": output})
+
+    def observe_result(self, tool: str, result: object) -> None:
+        """Feed a forwarded tool's output to the taint tracker (data-flow layer).
+
+        The async MCP server must call this after it awaits a downstream result.
+        """
+        if self._taint is not None:
+            self._taint.observe(tool, result)
 
 
 def _summarize(arguments: dict, limit: int = 160) -> str:

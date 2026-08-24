@@ -9,6 +9,7 @@ an editable **SVG** and rendered to a high-res **PNG** (via
 | `architecture.png` / `.svg` | Hero architecture diagram (whole system) |
 | `decision-gate.png` / `.svg` | The KAIROS gate — locked order + five outcomes |
 | `gateway.png` / `.svg` | The authority layer — governing MCP gateway |
+| `hermes-before-after.png` / `.svg` | Hermes with/without EIDOLON — the case-study single image |
 | `carousel/slide-1..6.png` | LinkedIn carousel (square 1080×1080) |
 | `carousel/eidolon-carousel.pdf` | The 6 slides as one PDF — upload as a LinkedIn *document* |
 

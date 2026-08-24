@@ -41,6 +41,9 @@ domain_profile:
       - external-client-comm
       - personnel-decision
       - legal-commitment
+      # A continuity twin must never exfiltrate the principal's data. The gateway
+      # derives this dynamically when a sensitive value flows to an egress tool.
+      - data-exfiltration
     escalation_required: [commit-action]
     budget_dimensions: [posts_per_window]
 

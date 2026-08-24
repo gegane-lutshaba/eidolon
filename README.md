@@ -17,8 +17,22 @@ Two invariants override everything and are property-tested in CI:
 2. **No unattested action** — no side effect runs without a successful `HORKOS`
    attestation (attest-then-act).
 
-📄 **White paper:** [`docs/whitepaper.md`](docs/whitepaper.md) · **Diagrams &
-social kit:** [`docs/visuals/`](docs/visuals/) · [`docs/linkedin-post.md`](docs/linkedin-post.md)
+📄 **White paper:** [`docs/whitepaper.md`](docs/whitepaper.md) · **Case study
+(Hermes with/without EIDOLON):** [`docs/case-study-hermes.md`](docs/case-study-hermes.md)
+(`make hermes-case`) · **Diagrams & social kit:** [`docs/visuals/`](docs/visuals/)
+· [`docs/linkedin-post.md`](docs/linkedin-post.md) · **Related work & gap
+analysis:** [`docs/review-and-related-work.md`](docs/review-and-related-work.md)
+
+**AgentDojo evaluation:** EIDOLON's authority layer contains **96% of injection
+tasks** while breaking **0% of benign tasks** (38% fully autonomous, 62%
+one-approval). [`docs/eval-agentdojo.md`](docs/eval-agentdojo.md) · reproduce:
+`uv sync --extra eval && python -m eidolon.eval`. `KAIROS.resolve` p95 ≈ 1 ms.
+
+**Composes with the field:** a CaMeL-style **data-flow taint** layer
+(`eidolon.gateway.taint`) closes the read-exfil gap; **automated adversarial
+certification** (`make adversarial`) makes the twin earn autonomy by surviving
+fresh attacks each round; and THEMIS delegations export as real **biscuit**
+tokens ([`docs/standards-interop.md`](docs/standards-interop.md)).
 
 ## See it in 60 seconds
 

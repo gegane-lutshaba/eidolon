@@ -72,8 +72,21 @@ async def _govern_and_forward(engine: GovernanceEngine, downstream, name, argume
         )
     # … acting: attest-then-forward to the real downstream tool.
     result = await downstream.call_tool(name, arguments)
+    # Feed the output to the data-flow layer so a later egress carrying a
+    # sensitive value it returned is caught as exfiltration.
+    engine.observe_result(name, _result_text(result, types))
     content = list(result.content) if result.content else []
     content.append(types.TextContent(
         type="text", text=f"[EIDOLON: {decision.level} · attested {decision.attestation_hash}]"))
     return types.CallToolResult(content=content, structuredContent=meta,
                                 isError=bool(result.isError))
+
+
+def _result_text(result, types) -> str:
+    """Flatten a downstream CallToolResult's text content for taint scanning."""
+    parts = []
+    for block in getattr(result, "content", None) or []:
+        text = getattr(block, "text", None)
+        if text:
+            parts.append(text)
+    return "\n".join(parts)

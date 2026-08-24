@@ -28,6 +28,8 @@ dependencies = [
 # test lane needs no live node.
 sage = ["sage-agent-sdk>=7.0"]
 mcp = ["mcp>=1.0"]
+eval = ["agentdojo>=0.1.35"]
+biscuit = ["biscuit-python>=0.4"]
 
 [dependency-groups]
 dev = [
