@@ -158,6 +158,49 @@ class Kairos:
             would_have_escalated=False,
         )
 
+    # -- approved-escalation execution -----------------------------------
+    def resolve_with_approval(
+        self,
+        action: Action,
+        context: Context,
+        chain: list[Delegation],
+        approval,  # eidolon.escalation.types.Approval
+        certificates: list[Certificate] | None = None,  # noqa: ARG002 — parity with resolve()
+    ) -> Decision:
+        """Execute an action the twin escalated, under a principal's signed approval.
+
+        An approval only *releases an escalation* — it never grants authority the
+        credential lacks: THEMIS is still verified, so a revoked/out-of-scope/
+        unpermitted/excluded action is DENIED even with a valid approval. The
+        approval is bound to this exact action digest and expires.
+        """
+        from eidolon.escalation.types import verify_approval
+        from eidolon.ethos.types import Decision as _D
+        from eidolon.ethos.types import Judgment as _J
+
+        if not verify_approval(approval, action, context.principal_id):
+            return self._finalize(
+                DecisionLevel.DENY, "approval invalid, expired, or not for this action",
+                action, context, chain, judgment=None, would_have_escalated=False,
+            )
+        cred = self._themis.verify(action, chain)
+        if not cred.valid:
+            return self._finalize(
+                DecisionLevel.DENY, f"authority denied despite approval: {cred.reason}",
+                action, context, chain, judgment=None, would_have_escalated=False,
+            )
+        # The human approved → execute and notify. Recorded with the approval as
+        # evidence, and would_have_escalated=True (it did, then was approved).
+        judgment = _J(
+            decision=_D.PROCEED, confidence=1.0, rationale="approved by principal",
+            evidence_refs=[f"approval:{approval.action_digest[:16]}"],
+            action_class=action.action_class,
+        )
+        return self._finalize(
+            DecisionLevel.NOTIFY_ACT, "executed under principal approval",
+            action, context, chain, judgment=judgment, would_have_escalated=True,
+        )
+
     # -- escalation -------------------------------------------------------
     def _escalate(self, trigger, fields, action, context, chain, *, judgment) -> Decision:
         template = self._template(trigger)

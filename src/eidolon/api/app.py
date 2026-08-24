@@ -30,6 +30,7 @@ from eidolon.coaching import Aspiration, Coach
 from eidolon.common import crypto
 from eidolon.common.errors import AttenuationError, EidolonError
 from eidolon.config import Settings
+from eidolon.escalation import EscalationQueue
 from eidolon.ethos.style import ClaudeStyleEngine
 from eidolon.profile import ProfileLoader
 from eidolon.runtime import Runtime, build_runtime
@@ -44,6 +45,7 @@ app = FastAPI(title="EIDOLON", version="0.1.0")
 _STATIC = pathlib.Path(__file__).parent / "static"
 
 _runtime: Runtime | None = None
+_escalations = EscalationQueue()
 
 
 def runtime() -> Runtime:
@@ -136,7 +138,49 @@ def resolve(
         decision = runtime().kairos.resolve(action, context, chain, certificates)
     except EidolonError as exc:
         raise HTTPException(status_code=409, detail=str(exc)) from exc
-    return decision.model_dump()
+    out = decision.model_dump()
+    # An escalated/drafted decision becomes a pending item in the approval inbox.
+    if decision.level.value in ("ESCALATE", "DRAFT"):
+        req = _escalations.enqueue(decision, action, context)
+        _esc_context[req.id] = (chain, certificates)
+        out["escalation_id"] = req.id
+    return out
+
+
+# request_id -> (chain, certificates) so an approval can re-execute the action.
+_esc_context: dict[str, tuple] = {}
+
+
+@app.get("/escalations")
+def list_escalations(principal_id: str) -> list[dict]:
+    return [r.model_dump(mode="json") for r in _escalations.list_pending(principal_id)]
+
+
+@app.post("/escalations/{request_id}/approve")
+def approve_escalation(request_id: str, signing_key: str = Body(..., embed=True)) -> dict:
+    req = _escalations.get(request_id)
+    if req is None:
+        raise HTTPException(status_code=404, detail="no such escalation")
+    try:
+        approval = _escalations.approve(request_id, signing_key)
+    except (ValueError, KeyError) as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    chain, certs = _esc_context.get(request_id, ([], []))
+    decision = runtime().kairos.resolve_with_approval(req.action, _ctx(req), chain, approval, certs)
+    return {"approved": request_id, "decision": decision.model_dump()}
+
+
+@app.post("/escalations/{request_id}/deny")
+def deny_escalation(request_id: str) -> dict:
+    try:
+        _escalations.deny(request_id)
+    except (ValueError, KeyError) as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    return {"denied": request_id}
+
+
+def _ctx(req) -> Context:
+    return Context(principal_id=req.principal_id, situation=req.action_class)
 
 
 @app.get("/replay")
