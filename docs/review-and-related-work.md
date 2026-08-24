@@ -261,8 +261,11 @@ Autonomy). EIDOLON's novelty is the *composition* plus the *fidelity* and
 10. **Purpose-binding / privacy** (cf. ToolPrivacyBench): bind captured data and
     tool use to a declared purpose in the mandate; evaluate on ToolPrivacyBench.
 11. **Payments:** map `commit-action` ↔ **AP2** payment mandates.
-12. **Formal model:** a small TLA+/Alloy spec of the gate order + non-bypass +
-    attenuation, to upgrade the property tests to a checked model.
+12. ✅ **Formal model** (`formal/EidolonGate.tla`) — a TLA+ spec of the gate
+    ordering + non-bypass, **machine-checked with TLC**: NoUnattestedAction,
+    DefaultDeny, ExclusionRespected, and AttenuationNeverWidens all hold over the
+    full state space; a deliberately-broken variant is caught. Reproducible in
+    the suite (`make formal`). See [`docs/formal-model.md`](formal-model.md).
 
 ---
 
