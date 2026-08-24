@@ -1,4 +1,4 @@
-.PHONY: install up down test test-integration lint fmt typecheck run demo dashboard transcript gateway-demo hermes-case adversarial escalation subagent clean
+.PHONY: install up down test test-integration lint fmt typecheck run demo dashboard transcript gateway-demo hermes-case adversarial escalation subagent formal clean
 
 install:
 	uv sync --all-extras
@@ -64,6 +64,12 @@ escalation:
 # Twin -> sub-agent delegation (cryptographic subset-only).
 subagent:
 	uv run python examples/subagent_delegation.py
+
+# Machine-check the TLA+ model of the gate with TLC (downloads tools on demand).
+formal:
+	@test -f formal/tla2tools.jar || curl -sL -o formal/tla2tools.jar \
+		https://github.com/tlaplus/tlaplus/releases/download/v1.8.0/tla2tools.jar
+	cd formal && java -cp tla2tools.jar tlc2.TLC -config EidolonGate.cfg EidolonGate.tla
 
 clean:
 	rm -rf .pytest_cache .ruff_cache .mypy_cache dist build

@@ -24,3 +24,10 @@ htmlcov/
 
 # OS
 .DS_Store
+
+# TLA+ tools (downloaded on demand)
+formal/tla2tools.jar
+formal/states/
+formal/*.old
+formal/*.bin
+formal/*TTrace*
