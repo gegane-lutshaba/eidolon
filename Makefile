@@ -1,4 +1,4 @@
-.PHONY: install up down test test-integration lint fmt typecheck run demo dashboard transcript gateway-demo hermes-case adversarial escalation subagent formal clean
+.PHONY: install up down test test-integration lint fmt typecheck run demo dashboard transcript gateway-demo hermes-case adversarial escalation subagent formal whitepaper-pdf clean
 
 install:
 	uv sync --all-extras
@@ -64,6 +64,10 @@ escalation:
 # Twin -> sub-agent delegation (cryptographic subset-only).
 subagent:
 	uv run python examples/subagent_delegation.py
+
+# Render the whitepaper to a print-quality PDF (needs: uv sync --extra docs && uv run playwright install chromium).
+whitepaper-pdf:
+	uv run python docs/build_whitepaper_pdf.py
 
 # Machine-check the TLA+ model of the gate with TLC (downloads tools on demand).
 formal:

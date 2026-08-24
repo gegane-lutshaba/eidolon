@@ -4,7 +4,8 @@
 revocable, fully-attributable slice of their authority to an AI agent that
 decides the way they would — and can prove it.**
 
-*White paper · v1 · Built on [SAGE](https://github.com/l33tdawg/sage).*
+**Mthandazo Ndhlovu** · White paper v1 · August 2026 · Built on
+[SAGE](https://github.com/l33tdawg/sage).
 
 ![EIDOLON architecture](visuals/architecture.png)
 
@@ -421,6 +422,19 @@ gap is not intelligence — it is governed authority: bounded, restrained,
 revocable, attributable. EIDOLON is that layer, and it is designed to be
 adopted the way memory was — as a server your existing agent plugs into. Give an
 agent memory with SAGE; give it governed authority with EIDOLON.
+
+---
+
+## Collaborate
+
+EIDOLON is an early, working system with a clear thesis and a lot of surface still
+to build — new **Domain Profiles**, richer **fidelity** grounding, distributed
+operation, standards alignment (biscuit / IETF agent tokens / AP2), and live
+benchmarks (AgentDojo, ToolPrivacyBench). If you work on **agent security,
+capability-based authorization, digital twins, or applied cryptography** — or you
+want a profile for your own domain — I'd love to collaborate.
+
+**Mthandazo Ndhlovu** — mthandazogegane@gmail.com
 
 ---
 

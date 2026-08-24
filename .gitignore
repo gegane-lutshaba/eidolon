@@ -31,3 +31,5 @@ formal/states/
 formal/*.old
 formal/*.bin
 formal/*TTrace*
+
+docs/_whitepaper_build.html
