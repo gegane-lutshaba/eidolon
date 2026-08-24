@@ -37,6 +37,10 @@ class ToolPolicy(BaseModel):
     # value of the "host" argument. THEMIS then denies out-of-grant targets.
     scope_from_args: dict[str, str] = Field(default_factory=dict)
     budget_cost: dict[str, int] = Field(default_factory=dict)
+    # The purpose this tool serves / the purpose data it reads is collected for
+    # (privacy purpose-limitation). Data collected for one purpose may not flow
+    # into a tool serving an incompatible purpose.
+    purpose: str | None = None
 
     def resolved_scope(self, arguments: dict) -> Scope:
         selectors = {k: list(v) for k, v in self.scope.selectors.items()}

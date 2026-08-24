@@ -32,9 +32,12 @@ one-approval). [`docs/eval-agentdojo.md`](docs/eval-agentdojo.md) · reproduce:
 (`eidolon.gateway.taint`) closes the read-exfil gap; **automated adversarial
 certification** (`make adversarial`) makes the twin earn autonomy by surviving
 fresh attacks each round; THEMIS delegations export as real **biscuit** tokens
-([`docs/standards-interop.md`](docs/standards-interop.md)); and the gate's
-invariants are **machine-checked in TLA+/TLC** (`make formal`,
-[`docs/formal-model.md`](docs/formal-model.md)).
+([`docs/standards-interop.md`](docs/standards-interop.md)); the gate's invariants
+are **machine-checked in TLA+/TLC** (`make formal`,
+[`docs/formal-model.md`](docs/formal-model.md)); **purpose-binding**
+([`docs/purpose-binding.md`](docs/purpose-binding.md)) enforces
+privacy-purpose-limitation; and approved payments export as signed **AP2
+mandates** ([`docs/payments-ap2.md`](docs/payments-ap2.md)).
 
 ## See it in 60 seconds
 

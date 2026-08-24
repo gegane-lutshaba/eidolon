@@ -18,6 +18,8 @@ testable; :mod:`eidolon.gateway.server` is a thin MCP adapter over it.
 
 from eidolon.gateway.engine import GovernanceEngine, GovernedResult
 from eidolon.gateway.mapping import ToolPolicy, ToolPolicyMap
+from eidolon.gateway.purpose import PurposeTracker
 from eidolon.gateway.taint import TaintTracker
 
-__all__ = ["GovernanceEngine", "GovernedResult", "ToolPolicy", "ToolPolicyMap", "TaintTracker"]
+__all__ = ["GovernanceEngine", "GovernedResult", "ToolPolicy", "ToolPolicyMap",
+           "TaintTracker", "PurposeTracker"]
