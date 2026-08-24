@@ -258,9 +258,15 @@ Autonomy). EIDOLON's novelty is the *composition* plus the *fidelity* and
    attempt is rejected at attenuation time. Maps Hermes' "restricted toolsets" to
    a cryptographic, biscuit-exportable subset-only credential.
 9. **Distributed revocation & heartbeat service**; multi-node SAGE.
-10. **Purpose-binding / privacy** (cf. ToolPrivacyBench): bind captured data and
-    tool use to a declared purpose in the mandate; evaluate on ToolPrivacyBench.
-11. **Payments:** map `commit-action` ↔ **AP2** payment mandates.
+10. ✅ **Purpose-binding / privacy** (`eidolon.gateway.purpose`) — a `PurposeTracker`
+    tags data with the purpose it was collected for; a value flowing into a tool
+    serving an incompatible purpose is denied (a dynamic `purpose-limitation`
+    exclusion). The enforcement mechanism ToolPrivacyBench measures. See
+    [`docs/purpose-binding.md`](purpose-binding.md).
+11. ✅ **AP2 payment mandates** (`eidolon.payments`) — an approved `commit-action`
+    payment escalation becomes a signed, verifiable AP2-shaped `PaymentMandate`
+    (Intent/Cart), bound to the action digest and its bounds, only issuable by the
+    approving principal. See [`docs/payments-ap2.md`](payments-ap2.md).
 12. ✅ **Formal model** (`formal/EidolonGate.tla`) — a TLA+ spec of the gate
     ordering + non-bypass, **machine-checked with TLC**: NoUnattestedAction,
     DefaultDeny, ExclusionRespected, and AttenuationNeverWidens all hold over the

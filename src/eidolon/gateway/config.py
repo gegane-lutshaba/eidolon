@@ -23,6 +23,7 @@ from eidolon.ethos.judgment.grounding import HashingEmbedder
 from eidolon.ethos.style import StyleEngine
 from eidolon.gateway.engine import GovernanceEngine
 from eidolon.gateway.mapping import ToolPolicy, ToolPolicyMap
+from eidolon.gateway.purpose import PurposeTracker
 from eidolon.gateway.taint import TaintTracker
 from eidolon.horkos import Horkos
 from eidolon.kairos import Kairos
@@ -52,6 +53,9 @@ class GatewayConfig(BaseModel):
     # Data-flow taint tracking (blocks exfiltration of sensitive read outputs
     # through egress tools). Active only if the profile excludes data-exfiltration.
     enable_taint: bool = True
+    # Purpose-limitation tracking (blocks data collected for one purpose from
+    # being used by a tool serving another). Active if the profile excludes it.
+    enable_purpose: bool = True
     # Optional grounding for ETHOS fidelity (in production this comes from capture).
     seed_memories: list[str] = Field(default_factory=list)
 
@@ -111,9 +115,10 @@ def build_engine(
     )
     # Data-flow layer: on by default when the profile declares data-exfiltration
     # as an excludable boundary (the gateway derives it dynamically).
-    taint = TaintTracker() if (config.enable_taint and
-                               "data-exfiltration" in profile.mandate_schema.exclusion_types) else None
+    excl = profile.mandate_schema.exclusion_types
+    taint = TaintTracker() if (config.enable_taint and "data-exfiltration" in excl) else None
+    purpose = PurposeTracker() if (config.enable_purpose and "purpose-limitation" in excl) else None
     return GovernanceEngine(
         kairos=kairos, policy_map=policy_map, chain=[root], principal_id=principal_pub,
-        certificates=certs, integrity_certificate=icert, taint=taint,
+        certificates=certs, integrity_certificate=icert, taint=taint, purpose=purpose,
     )

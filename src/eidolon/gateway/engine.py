@@ -21,6 +21,7 @@ from pydantic import BaseModel
 from eidolon.basanos.certify import Certificate
 from eidolon.basanos.integrity.report import IntegrityCertificate
 from eidolon.gateway.mapping import ToolPolicyMap
+from eidolon.gateway.purpose import PurposeTracker
 from eidolon.gateway.taint import TaintTracker
 from eidolon.kairos.gate import Kairos
 from eidolon.kairos.types import DecisionLevel
@@ -60,6 +61,7 @@ class GovernanceEngine:
         certificates: list[Certificate] | None = None,
         integrity_certificate: IntegrityCertificate | None = None,
         taint: TaintTracker | None = None,
+        purpose: PurposeTracker | None = None,
     ) -> None:
         self._kairos = kairos
         self._policies = policy_map
@@ -68,6 +70,7 @@ class GovernanceEngine:
         self._certs = certificates or []
         self._icert = integrity_certificate
         self._taint = taint
+        self._purpose = purpose
 
     def decide(self, tool: str, arguments: dict) -> GovernedResult:
         """Govern a tool call WITHOUT forwarding (sync). ``allowed`` means the
@@ -86,6 +89,10 @@ class GovernanceEngine:
         exclusions = list(policy.touches_exclusions)
         if self._taint is not None:
             exclusions += self._taint.exfiltration_exclusions(tool, arguments)
+        # Privacy purpose-limitation: deny data collected for one purpose flowing
+        # into a tool serving an incompatible purpose.
+        if self._purpose is not None:
+            exclusions += self._purpose.purpose_violations(arguments, policy.purpose)
         action = Action(
             id=f"tool:{tool}",
             action_class=policy.action_class,
@@ -129,12 +136,14 @@ class GovernanceEngine:
         return result.model_copy(update={"result": output})
 
     def observe_result(self, tool: str, result: object) -> None:
-        """Feed a forwarded tool's output to the taint tracker (data-flow layer).
+        """Feed a forwarded tool's output to the data-flow layers (taint + purpose).
 
         The async MCP server must call this after it awaits a downstream result.
         """
         if self._taint is not None:
             self._taint.observe(tool, result)
+        if self._purpose is not None:
+            self._purpose.observe(result, self._policies.policy_for(tool).purpose)
 
 
 def _summarize(arguments: dict, limit: int = 160) -> str:

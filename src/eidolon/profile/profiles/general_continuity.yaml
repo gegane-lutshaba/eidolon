@@ -44,6 +44,9 @@ domain_profile:
       # A continuity twin must never exfiltrate the principal's data. The gateway
       # derives this dynamically when a sensitive value flows to an egress tool.
       - data-exfiltration
+      # Data collected for one purpose may not be used for another (privacy
+      # purpose-limitation). Derived dynamically by the gateway.
+      - purpose-limitation
     escalation_required: [commit-action]
     budget_dimensions: [posts_per_window]
 
