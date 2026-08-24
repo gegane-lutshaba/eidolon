@@ -228,10 +228,11 @@ Autonomy). EIDOLON's novelty is the *composition* plus the *fidelity* and
    ~400× under the 400 ms target (`examples/bench_resolve.py`).
 
 **Tier 2 — close the honest gaps (converge with the field):**
-4. **Standards interop:** emit THEMIS delegations as **biscuit** tokens and align
-   with the **IETF attenuating-agent-tokens** draft; consume **A2A signed Agent
-   Cards** and **MCP OAuth 2.1** scopes. Moves EIDOLON from bespoke to
-   standards-track and unlocks real multi-agent delegation.
+4. ✅ **Standards interop** (`eidolon.themis.interop`) — THEMIS delegations export
+   as real **biscuit** tokens (facts + a self-enforcing least-privilege check),
+   with biscuit-native **offline attenuation** (subset-only) and Datalog
+   authorization. Maps directly to the **IETF attenuating-agent-tokens** draft;
+   MCP OAuth / A2A card mappings documented. See [`docs/standards-interop.md`](standards-interop.md).
 5. ✅ **CaMeL-style data-flow / taint tracking** (`eidolon.gateway.taint`) — the
    gateway tracks sensitive values from private reads and denies-and-attests any
    egress carrying them, deriving a dynamic `data-exfiltration` exclusion so

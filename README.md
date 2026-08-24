@@ -28,6 +28,12 @@ tasks** while breaking **0% of benign tasks** (38% fully autonomous, 62%
 one-approval). [`docs/eval-agentdojo.md`](docs/eval-agentdojo.md) · reproduce:
 `uv sync --extra eval && python -m eidolon.eval`. `KAIROS.resolve` p95 ≈ 1 ms.
 
+**Composes with the field:** a CaMeL-style **data-flow taint** layer
+(`eidolon.gateway.taint`) closes the read-exfil gap; **automated adversarial
+certification** (`make adversarial`) makes the twin earn autonomy by surviving
+fresh attacks each round; and THEMIS delegations export as real **biscuit**
+tokens ([`docs/standards-interop.md`](docs/standards-interop.md)).
+
 ## See it in 60 seconds
 
 ```bash
