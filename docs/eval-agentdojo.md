@@ -54,13 +54,21 @@ containment**.
 
 ### The one miss (and why it's honest)
 
-`slack/injection_task_3` is **not** contained: its only ground-truth call is
-`get_webpage` — a *read*. An authority layer intentionally permits reads, so it
-cannot stop an attack whose harmful effect is achieved through a read (fetching
-an attacker-controlled page, i.e. exfiltration/data-flow). This is not an
-authority failure — it is the boundary between the **authority** layer and a
-**data-flow** layer, and it is exactly the gap our roadmap closes with CaMeL-style
-taint tracking on tool arguments (`docs/review-and-related-work.md`, Tier 2).
+`slack/injection_task_3` is **not** contained by the authority layer alone: its
+only ground-truth call is `get_webpage` — a *read*. An authority layer
+intentionally permits reads, so it cannot stop an attack whose harmful effect is
+achieved through a read (fetching an attacker-controlled page, i.e.
+exfiltration/data-flow).
+
+**This gap is now closed by the data-flow layer** (`eidolon.gateway.taint`,
+Tier 2): the gateway tracks sensitive values returned by private reads, and when
+one flows into an egress call's arguments — e.g. `get_webpage("…?leak=<IBAN>")`
+or `send_email(body="…<IBAN>…")` — it derives a dynamic `data-exfiltration`
+exclusion that the gate denies and attests. Authority and data-flow compose
+through one mechanism. (This is CaMeL-style value-flow tracking; the enforcement
+eval above measures the authority layer in isolation, so this row remains "1
+uncontained" there — the taint layer catches it at runtime when data actually
+flows.)
 
 ## How this compares
 

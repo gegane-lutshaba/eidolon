@@ -232,10 +232,11 @@ Autonomy). EIDOLON's novelty is the *composition* plus the *fidelity* and
    with the **IETF attenuating-agent-tokens** draft; consume **A2A signed Agent
    Cards** and **MCP OAuth 2.1** scopes. Moves EIDOLON from bespoke to
    standards-track and unlocks real multi-agent delegation.
-5. **Add CaMeL-style data-flow / taint tracking** on tool arguments so
-   exfiltration *through an allowed tool* is caught (mark data derived from
-   untrusted sources; block unauthorized flows). Complements — doesn't replace —
-   the authority gate; a genuinely novel *authority × data-flow* combination.
+5. ✅ **CaMeL-style data-flow / taint tracking** (`eidolon.gateway.taint`) — the
+   gateway tracks sensitive values from private reads and denies-and-attests any
+   egress carrying them, deriving a dynamic `data-exfiltration` exclusion so
+   authority and data-flow compose through one mechanism. Closes the read-exfil
+   miss from the AgentDojo eval — a novel *authority × data-flow* combination.
 6. **Automated adversarial certification:** an LLM attacker generating fresh
    injections (AgentDojo-style) that BASANOS must contain to grant/keep an
    integrity certificate — continuous, not hand-written.

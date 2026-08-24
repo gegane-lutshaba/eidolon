@@ -23,6 +23,7 @@ from eidolon.ethos.judgment.grounding import HashingEmbedder
 from eidolon.ethos.style import StyleEngine
 from eidolon.gateway.engine import GovernanceEngine
 from eidolon.gateway.mapping import ToolPolicy, ToolPolicyMap
+from eidolon.gateway.taint import TaintTracker
 from eidolon.horkos import Horkos
 from eidolon.kairos import Kairos
 from eidolon.kairos.types import BudgetLedger
@@ -48,6 +49,9 @@ class GatewayConfig(BaseModel):
     budget: dict[str, int] = Field(default_factory=lambda: {"scope_expansion": 0})
     tool_policies: list[ToolPolicy] = Field(default_factory=list)
     default_class: str | None = None
+    # Data-flow taint tracking (blocks exfiltration of sensitive read outputs
+    # through egress tools). Active only if the profile excludes data-exfiltration.
+    enable_taint: bool = True
     # Optional grounding for ETHOS fidelity (in production this comes from capture).
     seed_memories: list[str] = Field(default_factory=list)
 
@@ -105,7 +109,11 @@ def build_engine(
         profile, config.tool_policies,
         default_scope=Scope(selectors=config.scope), default_class=config.default_class,
     )
+    # Data-flow layer: on by default when the profile declares data-exfiltration
+    # as an excludable boundary (the gateway derives it dynamically).
+    taint = TaintTracker() if (config.enable_taint and
+                               "data-exfiltration" in profile.mandate_schema.exclusion_types) else None
     return GovernanceEngine(
         kairos=kairos, policy_map=policy_map, chain=[root], principal_id=principal_pub,
-        certificates=certs, integrity_certificate=icert,
+        certificates=certs, integrity_certificate=icert, taint=taint,
     )
