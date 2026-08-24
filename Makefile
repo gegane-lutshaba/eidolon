@@ -1,4 +1,4 @@
-.PHONY: install up down test test-integration lint fmt typecheck run demo dashboard transcript gateway-demo hermes-case adversarial clean
+.PHONY: install up down test test-integration lint fmt typecheck run demo dashboard transcript gateway-demo hermes-case adversarial escalation subagent clean
 
 install:
 	uv sync --all-extras
@@ -56,6 +56,14 @@ hermes-case:
 # Automated adversarial certification — the twin earns autonomy by surviving attacks.
 adversarial:
 	uv run python examples/adversarial_cert.py
+
+# Escalation -> approval loop (sign to release an escalation).
+escalation:
+	uv run python examples/escalation_flow.py
+
+# Twin -> sub-agent delegation (cryptographic subset-only).
+subagent:
+	uv run python examples/subagent_delegation.py
 
 clean:
 	rm -rf .pytest_cache .ruff_cache .mypy_cache dist build

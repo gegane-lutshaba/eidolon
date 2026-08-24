@@ -246,10 +246,17 @@ Autonomy). EIDOLON's novelty is the *composition* plus the *fidelity* and
    (`make adversarial`).
 
 **Tier 3 — deployment readiness & reach:**
-7. **Escalation workflow:** approval inbox/queue, one-time approval tokens, SLAs,
-   and a "principal responds" loop (turns ESCALATE into a real product surface).
-8. **Multi-agent / sub-agent delegation e2e:** map Hermes' subagents (restricted
-   toolsets) to attenuated THEMIS credentials; demo twin → sub-agent narrowing.
+7. ✅ **Escalation approval workflow** (`eidolon.escalation`) — an escalated
+   decision becomes a pending item in an approval inbox; the principal approves
+   by *signing* the exact action (a one-time, expiring `Approval`), and KAIROS
+   executes it via `resolve_with_approval` — attested. An approval only releases
+   an escalation; it can't grant authority the credential lacks (revoked /
+   out-of-scope / unpermitted still DENY). API endpoints + `make escalation`.
+8. ✅ **Sub-agent delegation e2e** (`make subagent`) — a twin attenuates its
+   delegation to a sub-agent (strict subset); the chain root→twin→sub-agent
+   verifies to root and is bounded (out-of-subset class/scope → DENY); a widening
+   attempt is rejected at attenuation time. Maps Hermes' "restricted toolsets" to
+   a cryptographic, biscuit-exportable subset-only credential.
 9. **Distributed revocation & heartbeat service**; multi-node SAGE.
 10. **Purpose-binding / privacy** (cf. ToolPrivacyBench): bind captured data and
     tool use to a declared purpose in the mandate; evaluate on ToolPrivacyBench.
