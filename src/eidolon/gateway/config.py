@@ -19,6 +19,7 @@ from eidolon.basanos.certify import Certificate
 from eidolon.common import crypto
 from eidolon.config import Settings
 from eidolon.ethos.facade import Ethos
+from eidolon.ethos.judgment.grounding import HashingEmbedder
 from eidolon.ethos.style import StyleEngine
 from eidolon.gateway.engine import GovernanceEngine
 from eidolon.gateway.mapping import ToolPolicy, ToolPolicyMap
@@ -69,7 +70,7 @@ def build_engine(
         sage.observe(principal_pub, content, "memory", "gateway.policy")
 
     themis = Themis()
-    ethos = Ethos(sage, style=style, profile=profile)
+    ethos = Ethos(sage, style=style, profile=profile, embedder=HashingEmbedder())
     kairos = Kairos(themis=themis, ethos=ethos, basanos=Basanos(), horkos=Horkos(sage),
                     sage=sage, profile=profile, settings=settings, budget=BudgetLedger())
 

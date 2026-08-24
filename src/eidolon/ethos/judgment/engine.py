@@ -18,6 +18,7 @@ Policy (in order):
 
 from __future__ import annotations
 
+from eidolon.ethos.judgment.grounding import Embedder, relevance
 from eidolon.ethos.types import Decision, Judgment, PolicyStep
 from eidolon.profile.schema import DomainProfile
 from eidolon.sage.port import Memory, SagePort
@@ -26,14 +27,21 @@ from eidolon.types import Action, Context
 # Evidence-strength thresholds (transparent constants, not learned weights).
 _STRONG_EVIDENCE = 1.5
 _SOME_EVIDENCE = 0.6
+# Relevance below this doesn't count a memory as supporting evidence.
+_MIN_RELEVANCE = 0.12
 
 
 class JudgmentEngine:
-    """The auditable fidelity engine. Depends only on the SAGE port + profile."""
+    """The auditable fidelity engine. Depends only on the SAGE port + profile.
 
-    def __init__(self, sage: SagePort, *, recall_k: int = 8) -> None:
+    An optional :class:`Embedder` improves evidence *grounding* (relevance
+    scoring) only; the decision remains a transparent threshold over the scores.
+    """
+
+    def __init__(self, sage: SagePort, *, recall_k: int = 8, embedder: Embedder | None = None) -> None:
         self._sage = sage
         self._recall_k = recall_k
+        self._embedder = embedder
 
     def evaluate(
         self,
@@ -113,26 +121,38 @@ class JudgmentEngine:
     def _evidence_strength(
         self, action: Action, context: Context, memories: list[Memory]
     ) -> tuple[float, PolicyStep]:
-        """Sum SAGE confidence over memories that lexically overlap the action.
+        """Confidence-weighted, relevance-scored evidence strength.
 
-        Transparent and deterministic: strength is the confidence-weighted count
-        of relevant memories. Higher-confidence, on-topic memories count more.
+        Transparent and deterministic: for each memory, relevance ∈ [0,1] (a
+        normalized-token Dice score, optionally blended with an embedding
+        cosine) is multiplied by its SAGE confidence. Strength is their sum, with
+        a small *consistency* bonus when several memories independently support
+        the action (agreement is a real fidelity signal, and it reduces reliance
+        on any single memory).
         """
-        terms = _terms(action.description) | _terms(context.query)
+        query = f"{action.description} {context.query}".strip()
+        contributions: list[tuple[str, float]] = []
         total = 0.0
-        contributing: list[str] = []
         for m in memories:
-            overlap = len(terms & _terms(m.content))
-            if overlap == 0:
+            rel = relevance(query, m.content, self._embedder)
+            if rel < _MIN_RELEVANCE:
                 continue
-            contribution = m.confidence_score * min(overlap, 3) / 3.0
+            contribution = m.confidence_score * rel
             total += contribution
-            contributing.append(m.id)
+            contributions.append((m.id, contribution))
+
+        supporting = len(contributions)
+        consistency = min(0.3, 0.1 * (supporting - 1)) if supporting > 1 else 0.0
+        total *= 1.0 + consistency
+
         return total, PolicyStep(
             rule="evidence-grounding",
-            outcome=f"strength={total:.2f} from {len(contributing)} memories",
+            outcome=(
+                f"strength={total:.2f} from {supporting} memories "
+                f"(consistency bonus {consistency:.2f})"
+            ),
             weight=total,
-            evidence_refs=contributing,
+            evidence_refs=[cid for cid, _ in contributions],
         )
 
 
@@ -144,7 +164,3 @@ def _calibrate(strength: float, *, ceiling: float) -> float:
     """
     saturated = 1.0 - pow(2.718281828, -max(strength, 0.0))
     return round(min(saturated, ceiling), 4)
-
-
-def _terms(text: str) -> set[str]:
-    return {t for t in text.lower().replace(",", " ").replace(".", " ").split() if len(t) > 2}

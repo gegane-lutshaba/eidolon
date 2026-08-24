@@ -35,8 +35,9 @@ class Ethos:
         *,
         style: StyleEngine | None = None,
         profile: DomainProfile | None = None,
+        embedder=None,
     ) -> None:
-        self._judgment = JudgmentEngine(sage)
+        self._judgment = JudgmentEngine(sage, embedder=embedder)
         self._style = style
         self._profile = profile
 
