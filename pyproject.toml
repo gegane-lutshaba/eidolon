@@ -30,6 +30,7 @@ sage = ["sage-agent-sdk>=7.0"]
 mcp = ["mcp>=1.0"]
 eval = ["agentdojo>=0.1.35"]
 biscuit = ["biscuit-python>=0.4"]
+docs = ["playwright>=1.40", "markdown>=3.5", "pygments>=2.17"]
 
 [dependency-groups]
 dev = [

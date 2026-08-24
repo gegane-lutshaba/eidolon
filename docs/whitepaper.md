@@ -4,7 +4,8 @@
 revocable, fully-attributable slice of their authority to an AI agent that
 decides the way they would — and can prove it.**
 
-*White paper · v1 · Built on [SAGE](https://github.com/l33tdawg/sage).*
+**Mthandazo Ndhlovu** · White paper v1 · August 2026 · Built on
+[SAGE](https://github.com/l33tdawg/sage).
 
 ![EIDOLON architecture](visuals/architecture.png)
 
@@ -40,10 +41,15 @@ front of any existing agent — Hermes, Claude Code, OpenClaw, Raptor, Cursor �
 a **governing gateway**, with zero changes to the agent. If SAGE is *the memory
 layer* agents plug in, EIDOLON is *the authority layer*.
 
-The system is implemented and tested (100+ tests including Hypothesis property
-tests and live-consensus integration), with two reference profiles
-(`general-continuity` and a governance-only `offensive-security`) and runnable
-demos.
+The system is implemented and tested (150+ tests including Hypothesis property
+tests, live-consensus integration, and a **TLA+/TLC machine-checked** model of
+the gate). On **AgentDojo** — the standard prompt-injection benchmark — EIDOLON's
+authority layer contains **96% of injection tasks while breaking 0% of benign
+tasks**, and the gate resolves in **~1 ms** (p95). It composes with the field's
+best ideas: a CaMeL-style **data-flow taint** layer for exfiltration, **purpose-
+binding** for privacy, an **approval workflow** for human-in-the-loop, and
+**biscuit**-standard token export for multi-agent delegation. Two reference
+profiles ship (`general-continuity` and a governance-only `offensive-security`).
 
 ---
 
@@ -164,8 +170,10 @@ ETHOS has two engines, hard-isolated as a *security boundary*:
 
 - **Judgment engine** — auditable and **LLM-free**. A transparent, deterministic
   policy grounded in consensus-memory retrieval produces the decision,
-  confidence, rationale, and resolvable evidence references. No black-box model
-  may produce a decision.
+  confidence, rationale, and resolvable evidence references. Grounding uses
+  normalized-token relevance plus an optional deterministic embedder, but the
+  *decision* remains a threshold over inspectable scores — **no black-box model
+  may produce a decision** (a determinism test enforces this).
 - **Style engine** — generative (Claude). It renders *voice* for drafts and
   escalation messages only. It may never emit or influence a decision,
   confidence, or scope.
@@ -256,6 +264,42 @@ gateway and — with zero code changes — every tool call becomes bounded,
 restrained, revocable, and attributable. SAGE gives the agent memory; EIDOLON
 gives it governed authority; and they compose (attestations live on SAGE).
 
+### 6.1 The data-flow layer (taint + purpose)
+
+The authority layer bounds *which* calls run; it intentionally permits reads. A
+thin **data-flow layer** composes beneath it to catch harm that flows *through*
+permitted calls, and it does so through the *same* enforcement mechanism — a
+dynamically-derived exclusion the gate denies and attests:
+
+- **Taint / exfiltration.** The gateway tracks sensitive values returned by
+  private reads; if one appears in an egress call's arguments (a webpage URL, an
+  email body), it derives a `data-exfiltration` exclusion — closing the
+  read-only exfil that an authority layer alone cannot. This is CaMeL-style
+  value-flow tracking, combined with cryptographic authority.
+- **Purpose-binding (privacy).** Data carries the *purpose it was collected for*;
+  a value flowing into a tool serving an incompatible purpose derives a
+  `purpose-limitation` exclusion — the GDPR-style limitation that ToolPrivacyBench
+  measures, enforced structurally rather than by the model's judgment.
+
+### 6.2 Human-in-the-loop, sub-agents, payments, standards
+
+- **Approval workflow.** An escalation becomes a pending item in an approval
+  inbox; the principal approves by *signing* the exact action (a one-time,
+  expiring authorization), and the gate executes it under that approval —
+  attested. An approval only *releases an escalation*; it never grants authority
+  the credential lacks.
+- **Sub-agent delegation.** A twin attenuates its credential to a sub-agent as a
+  cryptographic subset (fewer classes, narrower scope, lower autonomy); the chain
+  verifies to root and cannot widen — the standardized form of "restricted
+  toolsets."
+- **AP2 payments.** An approved payment escalation becomes a signed, AP2-shaped
+  payment mandate (Intent + Cart), bound to the action and its bounds, issuable
+  only by the approving principal.
+- **Standards interop.** THEMIS delegations export as real **biscuit** tokens
+  with native offline (subset-only) attenuation, mapping directly to the IETF
+  agent-token draft — so an EIDOLON credential travels through the wider
+  capability-token ecosystem.
+
 ---
 
 ## 7. Security properties & threat model
@@ -272,6 +316,11 @@ gives it governed authority; and they compose (attestations live on SAGE).
 - **Runaway autonomy.** The autonomy ceiling is `min` of credential, certificate,
   and org dial; uncertified or integrity-failing capability cannot act
   unattended. High-impact classes always escalate.
+- **Exfiltration through a permitted tool.** The data-flow layer denies a
+  sensitive value flowing into an egress call, even when the class is allowed
+  (§6.1) — closing the read-only exfil an authority layer alone misses.
+- **Purpose creep.** Data collected for one purpose cannot flow into a tool
+  serving an incompatible purpose (§6.1).
 - **Repudiation.** Attest-then-act plus a consensus ledger make every
   side-effecting action non-repudiable and replayable.
 - **Loss of control.** Sub-second revocation and a dead-man's-switch bound the
@@ -281,48 +330,88 @@ gives it governed authority; and they compose (attestations live on SAGE).
 
 ## 8. Evaluation
 
-The implementation is validated by 100+ automated tests, including:
+### 8.1 AgentDojo (security × utility)
 
-- **Property tests** (Hypothesis) that attenuation never widens authority across
-  randomized credentials, and default-deny holds.
-- **Isolation tests** — ETHOS style/judgment separation (import-graph +
-  behavioral), coaching decoupling (import-graph + behavioral), skill
-  subordination ("cannot smuggle authority").
-- **Gate tests** — attest-then-act (no execution without a prior attestation),
-  injection-resistance, per-class outcomes.
-- **Adversarial tests** — the integrity suite contains memory-poisoning,
-  injection, and scope-evasion cases.
-- **Live-consensus integration** — against a Dockerized SAGE node: cross-principal
-  isolation, attest→replay byte-identical, and a full multi-class session
-  reconstructable from the ledger.
-- **Gateway tests** — the real tool runs only when authorized, every call is
-  attested, fail-closed on unknown tools, arg-derived scope denies out-of-grant
-  targets, injection through arguments never widens authority.
+We evaluate the authority layer on **[AgentDojo](https://arxiv.org/pdf/2406.13352)**
+(97 user tasks, 26 injection tasks across banking, workspace, travel, slack).
+Using each task's ground-truth tool calls, we compute EIDOLON's mandate verdict
+per call — a deterministic, reproducible measurement that isolates exactly the
+layer EIDOLON adds (no LLM runs needed).
+
+| | Injections contained | Benign tasks broken |
+|---|---:|---:|
+| **EIDOLON authority layer** | **25 / 26 (96%)** | **0 / 97 (0%)** — 38% fully autonomous, 62% one-approval |
+
+The one miss is a *read-only* exfil (`get_webpage`), which the data-flow layer
+(§6.1) then closes. For reference, CaMeL reports ~67% of attacks defended;
+undefended agents sit at 60–72% success. EIDOLON's containment is **structural
+and content-independent** — a signed credential re-checked independent of the
+prompt, so an injection can't argue past it. `docs/eval-agentdojo.md`.
+
+### 8.2 Machine-checked model
+
+The gate's invariants are specified in **TLA+** and verified exhaustively with the
+**TLC** model checker: `NoUnattestedAction` (executed ⇒ attested), `DefaultDeny`,
+`ExclusionRespected`, and `AttenuationNeverWidens` all hold over the full state
+space; a deliberately-broken variant that bypasses attest-then-act is *caught*,
+so the check is meaningful. `docs/formal-model.md`.
+
+### 8.3 Automated adversarial certification
+
+The integrity face is generative: a procedural (and optional Claude) attacker
+produces *fresh* memory-poisoning / injection / scope-evasion attacks each round,
+and a twin earns an acting-level certificate only by containing every attack over
+all rounds — a continuous adversarial guarantee, not a fixed checklist.
+
+### 8.4 Performance and test suite
+
+`KAIROS.resolve` p95 ≈ **1 ms** (in-memory, excluding LLM/tool execution — ~400×
+under the 400 ms target). 150+ automated tests: Hypothesis property tests
+(attenuation-never-widens, default-deny), isolation tests (style/judgment,
+coaching, skill subordination), gate tests (attest-then-act, injection-resistance),
+data-flow and purpose tests, escalation/approval and payment-mandate tests, and
+live-SAGE integration (cross-principal isolation, attest→replay byte-identical,
+full-session replay).
 
 ---
 
-## 9. Comparison
+## 9. Related work & comparison
 
-| | Raw MCP agent | Approval-gated agent | Policy/guardrail filters | **EIDOLON** |
-|---|---|---|---|---|
-| Bounded authority | ✗ | partial (manual) | class-level | cryptographic, attenuable |
-| Restraint (escalate/hand-back) | ✗ | human-driven | block/allow | graded (deny/escalate/draft/notify/act) |
-| Revocable mid-session | ✗ | ✗ | redeploy | < 1s, dead-man's-switch |
-| Attribution / audit | logs | logs | logs | consensus-ledger attestation, replayable |
-| Injection-resistant authority | ✗ | ✗ | best-effort | authority is memory-blind |
-| Drop-in (no agent changes) | — | ✗ | varies | MCP gateway, zero changes |
+EIDOLON sits at the confluence of several active research strands and contributes
+their *unification* plus two under-explored primitives (a fidelity axis and
+runtime-certified autonomy). A full survey — CaMeL, Progent, biscuit/IBCT and the
+IETF agent-token draft, LlamaFirewall/NeMo, autonomy-certificate work, person-twin
+research, and AgentDojo/ToolPrivacyBench — is in `docs/review-and-related-work.md`.
+
+| | Raw MCP agent | Guardrail filters (LlamaFirewall/NeMo) | Privilege policy (Progent) | Data-flow (CaMeL) | **EIDOLON** |
+|---|---|---|---|---|---|
+| Bounded authority | ✗ | ✗ | ✓ (local policy) | via caps | cryptographic, attenuable |
+| Cryptographic delegation chain | ✗ | ✗ | ✗ | ✗ | ✓ (biscuit-exportable) |
+| Fidelity ("would they act?") | ✗ | ✗ | ✗ | ✗ | ✓ |
+| Runtime-certified autonomy | ✗ | ✗ | ✗ | ✗ | ✓ |
+| Injection-resistant authority | ✗ | detection | partial | ✓ (data-flow) | ✓ (memory-blind credential) |
+| Data-flow / exfil control | ✗ | partial | partial | ✓ | ✓ (composed) |
+| Revocable < 1 s / dead-man | ✗ | ✗ | ✗ | ✗ | ✓ |
+| Attest-then-act on consensus | ✗ | logs | ✗ | ✗ | ✓ |
+| Drop-in (no agent changes) | — | varies | ✓ | ✗ | ✓ (MCP gateway) |
 
 ---
 
-## 10. Roadmap
+## 10. Status & roadmap
 
-- Additional Domain Profiles (finance ops, customer support, SRE) contributed by
-  an ecosystem — the profile is the extensibility primitive and the business
-  model.
-- Richer capture connectors feeding ETHOS fidelity grounding.
-- Hardening the integrity face into a continuous certification pipeline.
-- Multi-principal continuity grants and organizational governance tooling.
-- HTTP/streamable MCP transport and a hosted gateway.
+The core (identity-fidelity + delegated-authority), the governing MCP gateway, the
+data-flow and purpose layers, adversarial certification, the approval workflow,
+sub-agent delegation, biscuit standards interop, AP2 payment mandates, and the
+formal model are **implemented and tested**. Remaining work:
+
+- **Distributed operation** — multi-node SAGE consensus and revocation
+  propagation across distributed gateways (the one infrastructure-bound item).
+- **Live privacy benchmark** — wire ToolPrivacyBench as an executable eval once
+  available (the mechanism already exists).
+- **Ecosystem profiles** — finance ops, customer support, SRE; the profile is the
+  extensibility primitive and the business model.
+- **Richer capture** feeding ETHOS fidelity grounding; a hosted gateway with
+  HTTP/streamable MCP transport; multi-principal organizational governance.
 
 ---
 
@@ -333,6 +422,19 @@ gap is not intelligence — it is governed authority: bounded, restrained,
 revocable, attributable. EIDOLON is that layer, and it is designed to be
 adopted the way memory was — as a server your existing agent plugs into. Give an
 agent memory with SAGE; give it governed authority with EIDOLON.
+
+---
+
+## Collaborate
+
+EIDOLON is an early, working system with a clear thesis and a lot of surface still
+to build — new **Domain Profiles**, richer **fidelity** grounding, distributed
+operation, standards alignment (biscuit / IETF agent tokens / AP2), and live
+benchmarks (AgentDojo, ToolPrivacyBench). If you work on **agent security,
+capability-based authorization, digital twins, or applied cryptography** — or you
+want a profile for your own domain — I'd love to collaborate.
+
+**Mthandazo Ndhlovu** — mthandazogegane@gmail.com
 
 ---
 

@@ -149,13 +149,35 @@ judgment or authority decision ever depends on the LLM.**
 ## API surface
 
 `POST /keypair` · `POST /delegations/{mint,attenuate,revoke}` · `POST /heartbeat`
-· `POST /resolve` (the gate) · `GET /replay` · `POST /capture/ingest` ·
-`GET /profiles/{id}`. See `eidolon.api.app`.
+· `POST /resolve` (the gate) · `GET|POST /escalations/{id}/{approve,deny}`
+(approval inbox) · `GET /replay` · `POST /capture/{ingest,ingest_multi}` ·
+`POST /skills{,/run}` · `POST /coaching/report` · `GET /profiles/{id}` ·
+`GET /` (dashboard). See `eidolon.api.app`.
 
 ## Status
 
-The full PRD is implemented and tested (97 tests: unit + Hypothesis property
-tests + live-SAGE integration) — Phase 0 + Phase 1 plus every v2 item in §12.
+The **full PRD** (Phase 0 + Phase 1 + every v2 item) **and a research roadmap**
+beyond it are implemented and tested — **150+ tests**: Hypothesis property tests,
+live-SAGE integration, and a TLA+/TLC machine-checked model of the gate.
+
+**Beyond the PRD** ([`docs/review-and-related-work.md`](docs/review-and-related-work.md)):
+- **Evaluation** — AgentDojo: 96% of injection tasks contained, 0% of benign
+  tasks broken; `resolve` p95 ≈ 1 ms ([`docs/eval-agentdojo.md`](docs/eval-agentdojo.md)).
+- **Fidelity v2** — normalized-token + optional embedder grounding; the decision
+  stays a transparent, inspectable threshold (no black box).
+- **Data-flow layer** — CaMeL-style **taint** (exfiltration) + **purpose-binding**
+  (privacy) compose with authority through one mechanism
+  ([`taint`](docs/eval-agentdojo.md) · [`purpose`](docs/purpose-binding.md)).
+- **Automated adversarial certification** — the twin earns autonomy by containing
+  fresh attacks each round (`make adversarial`).
+- **Standards** — THEMIS delegations export as **biscuit** tokens
+  ([`docs/standards-interop.md`](docs/standards-interop.md)); the gate is
+  **machine-checked** ([`docs/formal-model.md`](docs/formal-model.md)).
+- **Deployment** — an **escalation → approval** workflow (signed, one-time),
+  **sub-agent** attenuated delegation, and **AP2 payment mandates**
+  ([`docs/payments-ap2.md`](docs/payments-ap2.md)).
+
+Only distributed operation (multi-node SAGE + revocation propagation) remains.
 
 **v2:**
 
