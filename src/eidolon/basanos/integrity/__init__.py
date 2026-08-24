@@ -15,6 +15,11 @@ or at most drafted). The resulting :class:`IntegrityCertificate` gates the
 autonomy ceiling alongside the fidelity certificate (certify-before-empower).
 """
 
+from eidolon.basanos.integrity.attacker import (
+    AdversarialAttacker,
+    LLMAttacker,
+    ProceduralAttacker,
+)
 from eidolon.basanos.integrity.report import (
     Finding,
     IntegrityCertificate,
@@ -38,4 +43,7 @@ __all__ = [
     "KairosTwinAdapter",
     "AttackCase",
     "all_cases",
+    "AdversarialAttacker",
+    "ProceduralAttacker",
+    "LLMAttacker",
 ]

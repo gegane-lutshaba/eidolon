@@ -237,9 +237,12 @@ Autonomy). EIDOLON's novelty is the *composition* plus the *fidelity* and
    egress carrying them, deriving a dynamic `data-exfiltration` exclusion so
    authority and data-flow compose through one mechanism. Closes the read-exfil
    miss from the AgentDojo eval — a novel *authority × data-flow* combination.
-6. **Automated adversarial certification:** an LLM attacker generating fresh
-   injections (AgentDojo-style) that BASANOS must contain to grant/keep an
-   integrity certificate — continuous, not hand-written.
+6. ✅ **Automated adversarial certification** (`eidolon.basanos.integrity.attacker`)
+   — a `ProceduralAttacker` (offline, seeded, diverse) and an optional Claude
+   `LLMAttacker` generate FRESH injections each round; `certify_integrity_adversarial`
+   grants an acting-level certificate only if the twin contains every generated
+   attack across all rounds. A continuous adversarial guarantee, not a checklist
+   (`make adversarial`).
 
 **Tier 3 — deployment readiness & reach:**
 7. **Escalation workflow:** approval inbox/queue, one-time approval tokens, SLAs,
