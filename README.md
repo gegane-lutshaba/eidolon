@@ -172,7 +172,9 @@ Postgres substrate for the integration-test lane, `make up`.)
 
 `POST /keypair` · `POST /delegations/{mint,attenuate,revoke}` · `POST /heartbeat`
 · `POST /resolve` (the gate) · `GET|POST /escalations/{id}/{approve,deny}`
-(approval inbox) · `GET /replay` · `POST /capture/{ingest,ingest_multi}` ·
+(approval inbox) · `GET /replay` · `GET /audit` (console) ·
+`GET /audit/{chain,export.json,export.csv}` (integrity + compliance export) ·
+`POST /capture/{ingest,ingest_multi}` ·
 `POST /skills{,/run}` · `POST /coaching/report` · `GET /profiles/{id}` ·
 `GET /` (dashboard). See `eidolon.api.app`.
 

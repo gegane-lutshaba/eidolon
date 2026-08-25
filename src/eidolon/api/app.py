@@ -22,8 +22,9 @@ from __future__ import annotations
 import pathlib
 
 from fastapi import Body, FastAPI, HTTPException
-from fastapi.responses import HTMLResponse
+from fastapi.responses import HTMLResponse, PlainTextResponse, Response
 
+from eidolon.api import audit as audit_svc
 from eidolon.basanos.certify import Certificate
 from eidolon.capture import ConsentGrant, connect, ingest, ingest_all, known_sources
 from eidolon.coaching import Aspiration, Coach
@@ -189,6 +190,50 @@ def replay(principal_id: str, action_class: str | None = None, limit: int = 1000
         ReplayFilter(principal_id=principal_id, action_class=action_class, limit=limit)
     )
     return [r.model_dump(mode="json") for r in records]
+
+
+# -- audit console --------------------------------------------------------
+@app.get("/audit", response_class=HTMLResponse)
+def audit_console() -> str:
+    """Server-rendered audit console: session replay, chain integrity, export."""
+    return (_STATIC / "audit.html").read_text(encoding="utf-8")
+
+
+@app.get("/audit/chain")
+def audit_chain() -> dict:
+    """Attestation-ledger tamper-evidence status (hash chain on the postgres backend)."""
+    return audit_svc.chain_status(runtime().sage)
+
+
+@app.get("/audit/export.json")
+def audit_export_json(
+    principal_id: str, action_class: str | None = None, limit: int = 5000
+) -> Response:
+    bundle = audit_svc.evidence_bundle(
+        runtime().sage,
+        ReplayFilter(principal_id=principal_id, action_class=action_class, limit=limit),
+    )
+    from eidolon.common.canonical import canonical_json
+
+    return Response(
+        content=canonical_json(bundle),
+        media_type="application/json",
+        headers={"Content-Disposition": f'attachment; filename="eidolon-evidence-{principal_id}.json"'},
+    )
+
+
+@app.get("/audit/export.csv", response_class=PlainTextResponse)
+def audit_export_csv(
+    principal_id: str, action_class: str | None = None, limit: int = 5000
+) -> Response:
+    body = audit_svc.ledger_csv(
+        runtime().sage,
+        ReplayFilter(principal_id=principal_id, action_class=action_class, limit=limit),
+    )
+    return PlainTextResponse(
+        content=body,
+        headers={"Content-Disposition": f'attachment; filename="eidolon-ledger-{principal_id}.csv"'},
+    )
 
 
 @app.post("/capture/ingest")
