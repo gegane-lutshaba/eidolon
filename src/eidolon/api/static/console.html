@@ -1,0 +1,84 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>EIDOLON — control plane</title>
+<style>
+  :root {
+    --bg:#0b0e14; --panel:#131824; --ink:#e6e9ef; --dim:#8a93a6; --line:#232b3a;
+    --green:#39d98a; --amber:#f2b84b; --red:#ff6b6b; --cyan:#5cc8ff; --accent:#7c7bff;
+  }
+  * { box-sizing:border-box; }
+  body { margin:0; background:var(--bg); color:var(--ink);
+    font:15px/1.5 ui-sans-serif,system-ui,-apple-system,Segoe UI,Roboto,sans-serif; }
+  header { padding:24px; border-bottom:1px solid var(--line);
+    display:flex; justify-content:space-between; align-items:center; gap:16px; flex-wrap:wrap; }
+  h1 { margin:0; font-size:21px; }
+  .tag { color:var(--dim); font-size:13px; margin-top:3px; }
+  a { color:var(--cyan); text-decoration:none; }
+  main { max-width:960px; margin:0 auto; padding:24px; }
+  .chips { display:flex; gap:10px; flex-wrap:wrap; margin-bottom:22px; }
+  .chip { background:var(--panel); border:1px solid var(--line); border-radius:10px;
+    padding:10px 14px; font-size:13px; color:var(--dim); }
+  .chip b { color:var(--ink); }
+  .dot { display:inline-block; width:9px; height:9px; border-radius:50%; margin-right:6px; background:var(--dim); }
+  .dot.ok { background:var(--green); } .dot.bad { background:var(--red); }
+  .grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(220px,1fr)); gap:14px; }
+  .card { background:var(--panel); border:1px solid var(--line); border-radius:12px;
+    padding:18px; display:block; color:var(--ink); }
+  .card:hover { border-color:var(--accent); }
+  .card h3 { margin:0 0 6px; font-size:16px; }
+  .card p { margin:0; color:var(--dim); font-size:13px; }
+  .role { font-weight:700; }
+  .role.admin { color:var(--green); } .role.auditor { color:var(--cyan); }
+</style>
+</head>
+<body>
+<header>
+  <div>
+    <h1>EIDOLON <span style="color:var(--accent)">·</span> control plane</h1>
+    <div class="tag">Provable delegated agency — bounded, revocable, attributable.</div>
+  </div>
+  <div>signed in as <span class="role" id="role">…</span> · <a href="#" id="logout">log out</a></div>
+</header>
+<main>
+  <div class="chips">
+    <span class="chip" id="svc">service: …</span>
+    <span class="chip" id="ready">readiness: …</span>
+    <span class="chip" id="chain">ledger: …</span>
+  </div>
+  <div class="grid">
+    <a class="card" href="/console/delegations"><h3>Delegations</h3><p>Mint, attenuate, and revoke authority. Generate identities.</p></a>
+    <a class="card" href="/console/approvals"><h3>Approvals inbox</h3><p>Review and sign or deny escalated actions.</p></a>
+    <a class="card" href="/audit"><h3>Audit console</h3><p>Session replay, ledger integrity, compliance export.</p></a>
+    <a class="card" href="/"><h3>Showcase</h3><p>Live governance scenarios against the real core.</p></a>
+  </div>
+</main>
+<script>
+const $ = (id) => document.getElementById(id);
+async function j(u, o) { const r = await fetch(u, o); return r.ok ? r.json() : null; }
+
+(async () => {
+  const who = await j("/whoami");
+  if (who && who.role) { $("role").textContent = who.role; $("role").classList.add(who.role); }
+
+  const h = await j("/health");
+  $("svc").innerHTML = h ? `service: <b>ok</b> · ${h.sage_backend} · ${h.profile}` : "service: <b>down</b>";
+
+  const rd = await fetch("/ready");
+  const rj = await rd.json().catch(() => ({}));
+  $("ready").innerHTML = `<span class="dot ${rd.ok ? "ok" : "bad"}"></span>readiness: <b>${rd.ok ? "ready" : "not ready"}</b>`;
+
+  const c = await j("/audit/chain");
+  if (!c) $("chain").textContent = "ledger: unavailable";
+  else if (!c.supported) $("chain").innerHTML = `ledger: <b>${c.backend}</b> (no chain)`;
+  else $("chain").innerHTML = `<span class="dot ${c.ok ? "ok" : "bad"}"></span>ledger: <b>${c.ok ? "intact" : "TAMPERED @" + c.broken_at}</b> · ${c.length} entries`;
+})();
+
+$("logout").addEventListener("click", async (e) => {
+  e.preventDefault(); await fetch("/logout", { method: "POST" }); window.location = "/login";
+});
+</script>
+</body>
+</html>

@@ -190,6 +190,7 @@ integration-test lane, `make up`.)
 (approval inbox) · `GET /replay` · `GET /audit` (console) ·
 `GET /audit/{chain,export.json,export.csv}` (integrity + compliance export) ·
 `POST /login` · `POST /logout` · `GET /whoami` · `GET /ready` ·
+`GET /console{,/delegations,/approvals}` (operator control plane) ·
 `POST /capture/{ingest,ingest_multi}` ·
 `POST /skills{,/run}` · `POST /coaching/report` · `GET /profiles/{id}` ·
 `GET /` (dashboard). See `eidolon.api.app`.

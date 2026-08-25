@@ -57,7 +57,7 @@
     <h1>EIDOLON — audit console</h1>
     <div class="tag">Every governed action, attributable · replay · ledger integrity · compliance export</div>
   </div>
-  <div><a href="/">← showcase dashboard</a> · <a href="#" id="logout">log out</a></div>
+  <div><a href="/console">← control plane</a> · <a href="/">showcase</a> · <a href="#" id="logout">log out</a></div>
 </header>
 
 <main>
@@ -66,6 +66,9 @@
     <input id="ac" placeholder="action_class (optional)" />
     <input id="lim" type="number" value="1000" title="limit" />
     <button id="load">Load ledger</button>
+    <label class="voice" style="color:var(--dim);font-size:13px;display:flex;gap:6px;align-items:center">
+      <input type="checkbox" id="denialsOnly" style="width:auto" /> ⚠ denials &amp; attacks only
+    </label>
   </div>
 
   <div class="bar">
@@ -137,22 +140,31 @@ async function loadLedger() {
 
   $("timeline").innerHTML = `<div class="empty">Loading…</div>`;
   const r = await fetch("/replay?" + qs.toString());
-  const rows = await r.json();
+  let rows = await r.json();
 
-  // wire exports to the same filter
+  // wire exports to the same (server-side) filter
   $("expJson").href = "/audit/export.json?" + qs.toString();
   $("expCsv").href  = "/audit/export.csv?"  + qs.toString();
   document.querySelectorAll(".exports button").forEach(b => b.disabled = rows.length === 0);
 
-  $("countChip").style.display = "";
-  $("countChip").textContent = `${rows.length} governed action${rows.length===1?"":"s"}`;
+  // "denials & attacks" — refusals, escalations, and near-misses
+  const denialsOnly = $("denialsOnly").checked;
+  const isDenialOrAttack = (a) =>
+    ["DENY", "ESCALATE"].includes(a.autonomy_level) || a.would_have_escalated;
+  const shown = denialsOnly ? rows.filter(isDenialOrAttack) : rows;
 
-  $("timeline").innerHTML = rows.length
-    ? rows.map(beat).join("")
-    : `<div class="empty">No attestations for <code>${esc(pid)}</code>${ac ? " in class <code>"+esc(ac)+"</code>" : ""}.</div>`;
+  $("countChip").style.display = "";
+  $("countChip").textContent = denialsOnly
+    ? `${shown.length} denial${shown.length===1?"":"s"} / attack${shown.length===1?"":"s"} of ${rows.length}`
+    : `${rows.length} governed action${rows.length===1?"":"s"}`;
+
+  $("timeline").innerHTML = shown.length
+    ? shown.map(beat).join("")
+    : `<div class="empty">${denialsOnly ? "No denials or attack attempts" : "No attestations"} for <code>${esc(pid)}</code>${ac ? " in class <code>"+esc(ac)+"</code>" : ""}.</div>`;
 }
 
 $("load").addEventListener("click", loadLedger);
+$("denialsOnly").addEventListener("change", loadLedger);
 $("pid").addEventListener("keydown", e => { if (e.key === "Enter") loadLedger(); });
 $("logout").addEventListener("click", async (e) => {
   e.preventDefault();

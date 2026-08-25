@@ -75,9 +75,9 @@ def test_auditor_can_read_but_not_mutate(client, tokens) -> None:
     h = {"Authorization": f"Bearer {AUDIT}"}
     assert client.get("/audit/chain", headers=h).status_code == 200
     assert client.get("/replay", params={"principal_id": "alice"}, headers=h).status_code == 200
-    # control-plane mutations are admin-only
-    assert client.post("/keypair", headers=h).status_code == 401
-    assert client.post("/delegations/revoke", json={"delegation_id": "x"}, headers=h).status_code == 401
+    # control-plane mutations are admin-only: authenticated but under-privileged -> 403
+    assert client.post("/keypair", headers=h).status_code == 403
+    assert client.post("/delegations/revoke", json={"delegation_id": "x"}, headers=h).status_code == 403
 
 
 # --- admin: full access -------------------------------------------------
@@ -111,7 +111,7 @@ def test_auditor_cookie_is_read_only(client, tokens) -> None:
     tokens(ADMIN, AUDIT)
     assert client.post("/login", json={"token": AUDIT}).json()["role"] == "auditor"
     assert client.get("/audit/chain").status_code == 200
-    assert client.post("/keypair").status_code == 401
+    assert client.post("/keypair").status_code == 403  # authenticated auditor, admin route
 
 
 def test_logout_clears_session(client, tokens) -> None:

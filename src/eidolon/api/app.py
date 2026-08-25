@@ -76,17 +76,25 @@ def runtime() -> Runtime:
 async def _gate_and_harden(request: Request, call_next):
     """Central auth gate (path/method policy) + baseline security headers."""
     needed = required_role(request.method, request.url.path)
-    if needed is not None and not has_role(current_role(request), needed):
-        wants_html = request.method in ("GET", "HEAD") and "text/html" in request.headers.get(
-            "accept", ""
-        )
-        if wants_html:
-            return RedirectResponse("/login", status_code=303)
-        return JSONResponse(
-            {"detail": f"{needed} authentication required"},
-            status_code=401,
-            headers={"WWW-Authenticate": "Bearer"},
-        )
+    if needed is not None:
+        role = current_role(request)
+        if not has_role(role, needed):
+            wants_html = request.method in ("GET", "HEAD") and "text/html" in request.headers.get(
+                "accept", ""
+            )
+            if role is None:
+                # Unauthenticated: send browsers to sign in, APIs a 401.
+                if wants_html:
+                    return RedirectResponse("/login", status_code=303)
+                return JSONResponse(
+                    {"detail": f"{needed} authentication required"},
+                    status_code=401,
+                    headers={"WWW-Authenticate": "Bearer"},
+                )
+            # Authenticated but under-privileged: 403, never a login loop.
+            return JSONResponse(
+                {"detail": f"{needed} role required (you are {role})"}, status_code=403
+            )
     resp = await call_next(request)
     resp.headers.setdefault("X-Content-Type-Options", "nosniff")
     resp.headers.setdefault("X-Frame-Options", "DENY")
@@ -162,6 +170,22 @@ def logout() -> Response:
 @app.get("/whoami")
 def whoami(request: Request) -> dict:
     return {"role": current_role(request), "auth_enabled": auth_enabled()}
+
+
+# -- operator control-plane console (admin) -------------------------------
+@app.get("/console", response_class=HTMLResponse)
+def console_home() -> str:
+    return (_STATIC / "console.html").read_text(encoding="utf-8")
+
+
+@app.get("/console/delegations", response_class=HTMLResponse)
+def console_delegations() -> str:
+    return (_STATIC / "console_delegations.html").read_text(encoding="utf-8")
+
+
+@app.get("/console/approvals", response_class=HTMLResponse)
+def console_approvals() -> str:
+    return (_STATIC / "console_approvals.html").read_text(encoding="utf-8")
 
 
 # -- showcase dashboard ---------------------------------------------------
@@ -251,8 +275,14 @@ _esc_context: dict[str, tuple] = {}
 
 
 @app.get("/escalations")
-def list_escalations(principal_id: str) -> list[dict]:
-    return [r.model_dump(mode="json") for r in _escalations.list_pending(principal_id)]
+def list_escalations(principal_id: str | None = None) -> list[dict]:
+    """Pending approvals. Omit principal_id for the full operator inbox."""
+    items = (
+        _escalations.list_pending(principal_id)
+        if principal_id
+        else _escalations.list_all_pending()
+    )
+    return [r.model_dump(mode="json") for r in items]
 
 
 @app.post("/escalations/{request_id}/approve")

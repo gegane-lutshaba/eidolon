@@ -91,8 +91,10 @@ def has_role(role: str | None, minimum: str) -> bool:
 # Exact paths that need no auth at all.
 _PUBLIC = {"/health", "/ready", "/login", "/logout", "/whoami", "/favicon.ico"}
 
-# GET paths available to the read-only auditor role (and thus admin too).
-_AUDITOR_GET_EXACT = {"/", "/showcase", "/replay", "/escalations", "/skills"}
+# GET paths available to the read-only auditor role (and thus admin too):
+# the forensic surface + the showcase. The control plane (delegations, the
+# approval inbox, skills) is admin-only.
+_AUDITOR_GET_EXACT = {"/", "/showcase", "/replay"}
 _AUDITOR_GET_PREFIX = ("/audit", "/profiles")
 
 
