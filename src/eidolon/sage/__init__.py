@@ -20,10 +20,14 @@ __all__ = [
 
 
 def get_sage() -> SagePort:
-    """Return the configured SAGE port (memory fake or live SDK adapter)."""
+    """Return the configured SAGE port (memory fake, Postgres, or live SDK)."""
     from eidolon.config import get_settings
 
     settings = get_settings()
+    if settings.sage_backend == "postgres":
+        from eidolon.sage.pg_port import PostgresSagePort
+
+        return PostgresSagePort(recall_prefetch=settings.sage_pg_recall_prefetch)
     if settings.sage_backend == "sage":
         from eidolon.sage.client_adapter import SageClientAdapter
 

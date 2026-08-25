@@ -22,13 +22,16 @@ class Settings(BaseSettings):
     )
 
     # --- SAGE substrate ---------------------------------------------------
-    # backend: "memory" for the fast lane, "sage" to bind the live SDK.
-    sage_backend: Literal["memory", "sage"] = "memory"
+    # backend: "memory" for the fast lane, "postgres" for a persistent single
+    # box (docker compose), "sage" to bind the live BFT-consensus SDK.
+    sage_backend: Literal["memory", "postgres", "sage"] = "memory"
     sage_base_url: str = "http://localhost:8080"
     sage_agent_key_path: str = "~/.sage/agent.key"
     sage_ca_cert: str | None = None
     # Domain used to persist HORKOS attestations on the consensus ledger.
     sage_attestation_domain: str = "attestations"
+    # Postgres port: max most-recent memories per principal loaded before ranking.
+    sage_pg_recall_prefetch: int = 5000
 
     # --- ETHOS style engine (Claude) -------------------------------------
     anthropic_api_key: str | None = None

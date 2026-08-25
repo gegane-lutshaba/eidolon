@@ -26,6 +26,7 @@ from eidolon.sage.port import (
     Memory,
     ReplayFilter,
     Scope,
+    lexical_overlap,
     now_utc,
 )
 
@@ -88,7 +89,7 @@ class InMemorySagePort:
             return bool(wanted_domains & mem_domains)
 
         scoped = [m for m in candidates if in_scope(m)]
-        ranked = sorted(scoped, key=lambda m: _overlap(query, m.content), reverse=True)
+        ranked = sorted(scoped, key=lambda m: lexical_overlap(query, m.content), reverse=True)
         return [m.model_copy(deep=True) for m in ranked[:k]]
 
     # -- attestation ledger ----------------------------------------------
@@ -124,10 +125,3 @@ class InMemorySagePort:
     def ledger_bytes(self, ledger_hash: str) -> str:
         """Raw stored canonical JSON for byte-identity assertions."""
         return self._ledger[ledger_hash]
-
-
-def _overlap(query: str, content: str) -> int:
-    """Cheap lexical relevance for deterministic recall ordering."""
-    q = set(query.lower().split())
-    c = set(content.lower().split())
-    return len(q & c)

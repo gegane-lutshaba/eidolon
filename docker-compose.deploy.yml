@@ -1,0 +1,52 @@
+# EIDOLON on a single VPS: `make deploy` (or `docker compose -f
+# docker-compose.deploy.yml up -d --build`).
+#
+# Unlike docker-compose.yml (the SAGE+Postgres substrate for integration tests),
+# this file runs the EIDOLON service ITSELF on a Postgres-backed SAGE port, so
+# the attestation ledger persists on this box (hash-chained, tamper-evident)
+# with no multi-node consensus cluster required.
+#
+#   - db:      Postgres + pgvector, persistent named volume.
+#   - eidolon: the FastAPI service (dashboard + gate + gateway API) on :8000.
+#
+# Configure via a .env file next to this one (see .env.example). At minimum set
+# EIDOLON_DB_PASSWORD; set EIDOLON_ANTHROPIC_API_KEY for Claude-voiced drafts.
+# Put a TLS-terminating reverse proxy (Caddy/nginx) in front for production.
+services:
+  db:
+    image: pgvector/pgvector:pg16
+    environment:
+      POSTGRES_USER: eidolon
+      POSTGRES_PASSWORD: ${EIDOLON_DB_PASSWORD:-eidolon}
+      POSTGRES_DB: eidolon
+    volumes:
+      - eidolon-pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U eidolon -d eidolon"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+    restart: unless-stopped
+
+  eidolon:
+    build: .
+    image: eidolon:latest
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      EIDOLON_SAGE_BACKEND: postgres
+      EIDOLON_DATABASE_URL: postgresql+psycopg://eidolon:${EIDOLON_DB_PASSWORD:-eidolon}@db:5432/eidolon
+      EIDOLON_API_HOST: 0.0.0.0
+      EIDOLON_API_PORT: "8000"
+      EIDOLON_AUTONOMY_DIAL: ${EIDOLON_AUTONOMY_DIAL:-autonomous}
+      EIDOLON_HEARTBEAT_TTL_SECONDS: ${EIDOLON_HEARTBEAT_TTL_SECONDS:-3600}
+      EIDOLON_REQUIRE_INTEGRITY_CERTIFICATION: ${EIDOLON_REQUIRE_INTEGRITY_CERTIFICATION:-false}
+      EIDOLON_ANTHROPIC_API_KEY: ${EIDOLON_ANTHROPIC_API_KEY:-}
+      EIDOLON_STYLE_MODEL: ${EIDOLON_STYLE_MODEL:-claude-sonnet-4-6}
+    ports:
+      - "${EIDOLON_PORT:-8000}:8000"
+    restart: unless-stopped
+
+volumes:
+  eidolon-pgdata:

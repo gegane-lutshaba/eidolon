@@ -146,6 +146,28 @@ The style engine (drafts/escalations) uses Claude (`claude-sonnet-4-6` by
 default). Without an API key it falls back to deterministic templates — **no
 judgment or authority decision ever depends on the LLM.**
 
+## Deploy on a single VPS
+
+One box, no consensus cluster. The `postgres` SAGE backend persists memory and
+the attestation ledger locally as an **append-only hash chain** — carrying
+SAGE's tamper-evidence onto a single host (any edit, deletion, or reorder breaks
+the chain and is caught by `make deploy-verify`).
+
+```bash
+cp .env.example .env        # set EIDOLON_DB_PASSWORD (+ EIDOLON_ANTHROPIC_API_KEY)
+make deploy                 # builds the image; brings up Postgres + EIDOLON on :8000
+make deploy-verify          # recompute the ledger hash chain — proves it is intact
+make deploy-logs            # tail the service
+make deploy-down            # stop
+```
+
+`docker-compose.deploy.yml` runs the FastAPI service (dashboard + gate + gateway
+API) against `pgvector/pgvector`. Put a TLS-terminating reverse proxy
+(Caddy/nginx) in front for production. Backend is selected by
+`EIDOLON_SAGE_BACKEND` (`memory` · `postgres` · `sage`); the full BFT-consensus
+substrate remains `sage`. (`docker-compose.yml` is unchanged — it's the SAGE +
+Postgres substrate for the integration-test lane, `make up`.)
+
 ## API surface
 
 `POST /keypair` · `POST /delegations/{mint,attenuate,revoke}` · `POST /heartbeat`

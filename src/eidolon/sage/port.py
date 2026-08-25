@@ -111,5 +111,16 @@ def now_utc() -> _dt.datetime:
     return _dt.datetime.now(_dt.UTC)
 
 
+def lexical_overlap(query: str, content: str) -> int:
+    """Cheap lexical relevance for deterministic recall ordering.
+
+    The single source of truth for recall ranking, shared by every
+    :class:`SagePort` implementation so recall behaviour (and therefore ETHOS
+    fidelity grounding) is identical across the in-memory, Postgres, and live
+    backends.
+    """
+    return len(set(query.lower().split()) & set(content.lower().split()))
+
+
 def as_jsonable(model: BaseModel) -> dict[str, Any]:
     return model.model_dump(mode="json")

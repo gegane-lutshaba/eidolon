@@ -33,3 +33,6 @@ formal/*.bin
 formal/*TTrace*
 
 docs/_whitepaper_build.html
+
+# stray local SQLite databases (dev/smoke tests use the postgres backend over sqlite)
+*.db
