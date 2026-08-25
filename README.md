@@ -154,12 +154,18 @@ SAGE's tamper-evidence onto a single host (any edit, deletion, or reorder breaks
 the chain and is caught by `make deploy-verify`).
 
 ```bash
-cp .env.example .env        # set EIDOLON_DB_PASSWORD (+ EIDOLON_ANTHROPIC_API_KEY)
+cp .env.example .env        # set EIDOLON_DB_PASSWORD, EIDOLON_AUDIT_TOKEN (+ ANTHROPIC key)
 make deploy                 # builds the image; brings up Postgres + EIDOLON on :8000
 make deploy-verify          # recompute the ledger hash chain — proves it is intact
 make deploy-logs            # tail the service
 make deploy-down            # stop
 ```
+
+The audit console, its exports, and `/replay` are the forensic surface: set
+`EIDOLON_AUDIT_TOKEN` (e.g. `openssl rand -hex 32`) to require it — via
+`Authorization: Bearer <token>` for CI/curl, or a login cookie in the browser.
+Fail-closed: unset only for localhost dev (it warns loudly). Set
+`EIDOLON_AUDIT_COOKIE_SECURE=true` behind HTTPS.
 
 `docker-compose.deploy.yml` runs the FastAPI service (dashboard + gate + gateway
 API) against `pgvector/pgvector`. Put a TLS-terminating reverse proxy

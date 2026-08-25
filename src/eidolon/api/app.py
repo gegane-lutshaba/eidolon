@@ -21,10 +21,11 @@ from __future__ import annotations
 
 import pathlib
 
-from fastapi import Body, FastAPI, HTTPException
-from fastapi.responses import HTMLResponse, PlainTextResponse, Response
+from fastapi import Body, Depends, FastAPI, HTTPException, Request
+from fastapi.responses import HTMLResponse, JSONResponse, PlainTextResponse, Response
 
 from eidolon.api import audit as audit_svc
+from eidolon.api.auth import AUDIT_COOKIE, is_audit_authed, require_audit, token_matches
 from eidolon.basanos.certify import Certificate
 from eidolon.capture import ConsentGrant, connect, ingest, ingest_all, known_sources
 from eidolon.coaching import Aspiration, Coach
@@ -185,7 +186,12 @@ def _ctx(req) -> Context:
 
 
 @app.get("/replay")
-def replay(principal_id: str, action_class: str | None = None, limit: int = 1000) -> list[dict]:
+def replay(
+    principal_id: str,
+    action_class: str | None = None,
+    limit: int = 1000,
+    _auth: None = Depends(require_audit),
+) -> list[dict]:
     records = runtime().horkos.replay(
         ReplayFilter(principal_id=principal_id, action_class=action_class, limit=limit)
     )
@@ -194,20 +200,51 @@ def replay(principal_id: str, action_class: str | None = None, limit: int = 1000
 
 # -- audit console --------------------------------------------------------
 @app.get("/audit", response_class=HTMLResponse)
-def audit_console() -> str:
-    """Server-rendered audit console: session replay, chain integrity, export."""
-    return (_STATIC / "audit.html").read_text(encoding="utf-8")
+def audit_console(request: Request) -> Response:
+    """Session replay, chain integrity, export. Serves the login page when the
+    caller is not yet authenticated (and a token is configured)."""
+    page = "audit.html" if is_audit_authed(request) else "audit_login.html"
+    return HTMLResponse((_STATIC / page).read_text(encoding="utf-8"))
+
+
+@app.get("/audit/login", response_class=HTMLResponse)
+def audit_login_page() -> str:
+    return (_STATIC / "audit_login.html").read_text(encoding="utf-8")
+
+
+@app.post("/audit/login")
+def audit_login(token: str = Body(..., embed=True)) -> Response:
+    if not token_matches(token):
+        raise HTTPException(status_code=401, detail="invalid token")
+    resp = JSONResponse({"ok": True})
+    resp.set_cookie(
+        AUDIT_COOKIE, token,
+        httponly=True, samesite="lax",
+        secure=runtime().settings.audit_cookie_secure,
+        max_age=43200, path="/",  # 12h
+    )
+    return resp
+
+
+@app.post("/audit/logout")
+def audit_logout() -> Response:
+    resp = JSONResponse({"ok": True})
+    resp.delete_cookie(AUDIT_COOKIE, path="/")
+    return resp
 
 
 @app.get("/audit/chain")
-def audit_chain() -> dict:
+def audit_chain(_auth: None = Depends(require_audit)) -> dict:
     """Attestation-ledger tamper-evidence status (hash chain on the postgres backend)."""
     return audit_svc.chain_status(runtime().sage)
 
 
 @app.get("/audit/export.json")
 def audit_export_json(
-    principal_id: str, action_class: str | None = None, limit: int = 5000
+    principal_id: str,
+    action_class: str | None = None,
+    limit: int = 5000,
+    _auth: None = Depends(require_audit),
 ) -> Response:
     bundle = audit_svc.evidence_bundle(
         runtime().sage,
@@ -224,7 +261,10 @@ def audit_export_json(
 
 @app.get("/audit/export.csv", response_class=PlainTextResponse)
 def audit_export_csv(
-    principal_id: str, action_class: str | None = None, limit: int = 5000
+    principal_id: str,
+    action_class: str | None = None,
+    limit: int = 5000,
+    _auth: None = Depends(require_audit),
 ) -> Response:
     body = audit_svc.ledger_csv(
         runtime().sage,

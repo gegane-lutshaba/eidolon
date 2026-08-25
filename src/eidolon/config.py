@@ -59,6 +59,16 @@ class Settings(BaseSettings):
     api_host: str = "127.0.0.1"
     api_port: int = 8000
 
+    # --- Audit console / forensic surface auth ---------------------------
+    # When set, the audit console, its exports, and /replay require this token
+    # (Authorization: Bearer <token>, or a login-cookie in the browser). Leave
+    # unset ONLY for localhost dev — the endpoints then log a loud warning and
+    # serve open. Set it before exposing the service to a network.
+    audit_token: str | None = None
+    # Mark the login cookie Secure (send only over HTTPS). Enable in production
+    # behind a TLS reverse proxy; keep False for plain-HTTP localhost.
+    audit_cookie_secure: bool = False
+
 
 @lru_cache
 def get_settings() -> Settings:

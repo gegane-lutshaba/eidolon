@@ -57,7 +57,7 @@
     <h1>EIDOLON — audit console</h1>
     <div class="tag">Every governed action, attributable · replay · ledger integrity · compliance export</div>
   </div>
-  <div><a href="/">← showcase dashboard</a></div>
+  <div><a href="/">← showcase dashboard</a> · <a href="#" id="logout">log out</a></div>
 </header>
 
 <main>
@@ -154,6 +154,11 @@ async function loadLedger() {
 
 $("load").addEventListener("click", loadLedger);
 $("pid").addEventListener("keydown", e => { if (e.key === "Enter") loadLedger(); });
+$("logout").addEventListener("click", async (e) => {
+  e.preventDefault();
+  await fetch("/audit/logout", { method: "POST" });
+  window.location = "/audit";
+});
 loadChain();
 </script>
 </body>
