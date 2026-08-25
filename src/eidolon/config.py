@@ -59,15 +59,19 @@ class Settings(BaseSettings):
     api_host: str = "127.0.0.1"
     api_port: int = 8000
 
-    # --- Audit console / forensic surface auth ---------------------------
-    # When set, the audit console, its exports, and /replay require this token
-    # (Authorization: Bearer <token>, or a login-cookie in the browser). Leave
-    # unset ONLY for localhost dev — the endpoints then log a loud warning and
-    # serve open. Set it before exposing the service to a network.
+    # --- Operator auth (single tenant, two roles) ------------------------
+    # Two secrets grant two roles, accepted as `Authorization: Bearer <token>`
+    # or a login cookie:
+    #   EIDOLON_ADMIN_TOKEN -> "admin"   : full control plane (mint/revoke, approve…)
+    #   EIDOLON_AUDIT_TOKEN -> "auditor" : read-only forensic surface (/audit, /replay)
+    # Fail-closed: with either set, unauthenticated/insufficient access is denied.
+    # With NEITHER set the platform runs OPEN (localhost dev only) and warns once.
+    admin_token: str | None = None
     audit_token: str | None = None
-    # Mark the login cookie Secure (send only over HTTPS). Enable in production
-    # behind a TLS reverse proxy; keep False for plain-HTTP localhost.
-    audit_cookie_secure: bool = False
+    # Mark the session cookie Secure (HTTPS only). Enable behind a TLS proxy.
+    session_cookie_secure: bool = False
+    # Optional comma-separated Host allow-list (adds TrustedHostMiddleware).
+    trusted_hosts: str | None = None
 
 
 @lru_cache

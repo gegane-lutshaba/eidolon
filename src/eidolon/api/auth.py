@@ -1,16 +1,21 @@
-"""Auth for the audit console + forensic endpoints (``/audit/*``, ``/replay``).
+"""Operator auth for the self-hosted platform (single tenant, two roles).
 
-A single configured secret (``EIDOLON_AUDIT_TOKEN``) gates the ledger. It is
-accepted two ways, so both humans and machines work:
+Two configured secrets grant two roles:
 
-- ``Authorization: Bearer <token>`` — for curl / CI / the JSON+CSV exports.
-- an HttpOnly login cookie — set by ``POST /audit/login`` so the browser console
-  works without embedding the token in every request.
+    EIDOLON_ADMIN_TOKEN -> "admin"   : full control plane (mint/revoke, approve…)
+    EIDOLON_AUDIT_TOKEN -> "auditor" : read-only forensic surface (/audit, /replay)
 
-Fail-closed in the spirit of EIDOLON's default-deny: with a token configured,
-anything unauthenticated is rejected. With **no** token configured the endpoints
-serve open (localhost-dev convenience) but log one loud warning — you must set
-the token before exposing the service to a network.
+Accepted as ``Authorization: Bearer <token>`` (CI / SDK) or an HttpOnly session
+cookie set by ``POST /login`` (browser). The role is re-derived from the token
+on every request — stateless, so rotating a token in config immediately
+invalidates its live sessions.
+
+Gating is centralized in :func:`required_role` (a path/method policy) and applied
+by one middleware, rather than sprinkled across endpoints.
+
+Fail-closed in the spirit of default-deny: with any token configured,
+unauthenticated or under-privileged access is rejected. With **no** token
+configured the platform runs OPEN (localhost dev only) and logs one loud warning.
 """
 
 from __future__ import annotations
@@ -18,54 +23,88 @@ from __future__ import annotations
 import logging
 import secrets
 
-from fastapi import HTTPException, Request
+from fastapi import Request
 
 from eidolon.config import Settings, get_settings
 
-AUDIT_COOKIE = "eidolon_audit"
+SESSION_COOKIE = "eidolon_session"
 
-_log = logging.getLogger("eidolon.audit")
+_RANK = {"auditor": 1, "admin": 2}
+_log = logging.getLogger("eidolon.auth")
 _warned = False
 
 
-def audit_auth_enabled(settings: Settings | None = None) -> bool:
-    return bool((settings or get_settings()).audit_token)
+# -- token → role --------------------------------------------------------
+def _token_roles(settings: Settings) -> list[tuple[str, str]]:
+    pairs: list[tuple[str, str]] = []
+    if settings.admin_token:
+        pairs.append((settings.admin_token, "admin"))
+    if settings.audit_token:
+        pairs.append((settings.audit_token, "auditor"))
+    return pairs
 
 
-def _presented_token(request: Request) -> str | None:
-    """The credential offered by the caller: Bearer header, else login cookie."""
+def auth_enabled(settings: Settings | None = None) -> bool:
+    settings = settings or get_settings()
+    return bool(settings.admin_token or settings.audit_token)
+
+
+def role_for_token(candidate: str | None, settings: Settings | None = None) -> str | None:
+    """Highest role a presented token grants, or None. Constant-time compare."""
+    if candidate is None:
+        return None
+    settings = settings or get_settings()
+    best: str | None = None
+    for token, role in _token_roles(settings):
+        if secrets.compare_digest(candidate, token) and (best is None or _RANK[role] > _RANK[best]):
+            best = role
+    return best
+
+
+def _presented(request: Request) -> str | None:
     header = request.headers.get("authorization", "")
     if header[:7].lower() == "bearer ":
         return header[7:].strip()
-    return request.cookies.get(AUDIT_COOKIE)
+    return request.cookies.get(SESSION_COOKIE)
 
 
-def token_matches(candidate: str | None, settings: Settings | None = None) -> bool:
-    configured = (settings or get_settings()).audit_token
-    if not configured or candidate is None:
-        return False
-    return secrets.compare_digest(candidate, configured)
-
-
-def is_audit_authed(request: Request, settings: Settings | None = None) -> bool:
+def current_role(request: Request, settings: Settings | None = None) -> str | None:
+    """The caller's effective role. In open mode (no tokens) everyone is admin."""
     settings = settings or get_settings()
-    if not settings.audit_token:
+    if not auth_enabled(settings):
         global _warned
         if not _warned:
             _log.warning(
-                "audit endpoints are UNAUTHENTICATED — set EIDOLON_AUDIT_TOKEN to "
-                "require a credential before exposing this service to a network."
+                "EIDOLON is running OPEN — no EIDOLON_ADMIN_TOKEN / EIDOLON_AUDIT_TOKEN set. "
+                "Set at least an admin token before exposing this service to a network."
             )
             _warned = True
-        return True  # dev convenience; loudly warned exactly once
-    return token_matches(_presented_token(request), settings)
+        return "admin"
+    return role_for_token(_presented(request), settings)
 
 
-def require_audit(request: Request) -> None:
-    """FastAPI dependency for JSON/CSV forensic endpoints (401 on failure)."""
-    if not is_audit_authed(request):
-        raise HTTPException(
-            status_code=401,
-            detail="audit authentication required",
-            headers={"WWW-Authenticate": "Bearer"},
-        )
+def has_role(role: str | None, minimum: str) -> bool:
+    return role is not None and _RANK[role] >= _RANK[minimum]
+
+
+# -- centralized path policy --------------------------------------------
+# Exact paths that need no auth at all.
+_PUBLIC = {"/health", "/ready", "/login", "/logout", "/whoami", "/favicon.ico"}
+
+# GET paths available to the read-only auditor role (and thus admin too).
+_AUDITOR_GET_EXACT = {"/", "/showcase", "/replay", "/escalations", "/skills"}
+_AUDITOR_GET_PREFIX = ("/audit", "/profiles")
+
+
+def required_role(method: str, path: str) -> str | None:
+    """The minimum role for (method, path). None = public.
+
+    Read/forensic surfaces are auditor+; everything else that mutates or drives
+    the control plane is admin.
+    """
+    if path in _PUBLIC:
+        return None
+    if method in ("GET", "HEAD"):
+        if path in _AUDITOR_GET_EXACT or path.startswith(_AUDITOR_GET_PREFIX):
+            return "auditor"
+    return "admin"

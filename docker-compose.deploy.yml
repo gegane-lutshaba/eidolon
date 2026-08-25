@@ -42,14 +42,38 @@ services:
       EIDOLON_AUTONOMY_DIAL: ${EIDOLON_AUTONOMY_DIAL:-autonomous}
       EIDOLON_HEARTBEAT_TTL_SECONDS: ${EIDOLON_HEARTBEAT_TTL_SECONDS:-3600}
       EIDOLON_REQUIRE_INTEGRITY_CERTIFICATION: ${EIDOLON_REQUIRE_INTEGRITY_CERTIFICATION:-false}
-      # Gates /audit, its exports, and /replay. Set EIDOLON_AUDIT_TOKEN before exposing.
+      # Operator auth (fail-closed). admin = control plane; auditor = forensic read.
+      EIDOLON_ADMIN_TOKEN: ${EIDOLON_ADMIN_TOKEN:-}
       EIDOLON_AUDIT_TOKEN: ${EIDOLON_AUDIT_TOKEN:-}
-      EIDOLON_AUDIT_COOKIE_SECURE: ${EIDOLON_AUDIT_COOKIE_SECURE:-false}
+      EIDOLON_SESSION_COOKIE_SECURE: ${EIDOLON_SESSION_COOKIE_SECURE:-false}
+      EIDOLON_TRUSTED_HOSTS: ${EIDOLON_TRUSTED_HOSTS:-}
       EIDOLON_ANTHROPIC_API_KEY: ${EIDOLON_ANTHROPIC_API_KEY:-}
       EIDOLON_STYLE_MODEL: ${EIDOLON_STYLE_MODEL:-claude-sonnet-4-6}
     ports:
       - "${EIDOLON_PORT:-8000}:8000"
     restart: unless-stopped
 
+  # Optional TLS-terminating reverse proxy with automatic HTTPS.
+  #   docker compose -f docker-compose.deploy.yml --profile tls up -d
+  # Requires EIDOLON_DOMAIN set to a hostname whose DNS points at this box
+  # (and EIDOLON_SESSION_COOKIE_SECURE=true). Locally it defaults to localhost.
+  caddy:
+    image: caddy:2
+    profiles: ["tls"]
+    depends_on:
+      - eidolon
+    environment:
+      EIDOLON_DOMAIN: ${EIDOLON_DOMAIN:-localhost}
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./deploy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data
+      - caddy-config:/config
+    restart: unless-stopped
+
 volumes:
   eidolon-pgdata:
+  caddy-data:
+  caddy-config:

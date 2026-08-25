@@ -1,7 +1,8 @@
-"""Auth on the forensic surface: /audit, its exports, and /replay.
+"""Operator auth: two roles (admin / auditor), fail-closed, Bearer + cookie.
 
-Fail-closed when EIDOLON_AUDIT_TOKEN is set (Bearer header or login cookie);
-open-with-warning when unset (localhost dev).
+- open mode (no tokens) -> everything works (localhost dev)
+- tokens set -> forensic surface needs auditor+, control plane needs admin
+- Bearer header (CI/SDK) and login cookie (browser) both grant the role
 """
 
 from __future__ import annotations
@@ -12,18 +13,20 @@ from fastapi.testclient import TestClient
 from eidolon.config import get_settings
 from eidolon.sage.port import Attestation, now_utc
 
-TOKEN = "s3cret-audit-token"
+ADMIN = "admin-token-xyz"
+AUDIT = "audit-token-abc"
 
 
 @pytest.fixture
-def audit_token(monkeypatch):
-    """Set/clear EIDOLON_AUDIT_TOKEN and reset the settings cache around a test."""
+def tokens(monkeypatch):
+    """Set/clear the role tokens and reset the settings cache around a test."""
 
-    def _set(value: str | None) -> None:
-        if value is None:
-            monkeypatch.delenv("EIDOLON_AUDIT_TOKEN", raising=False)
-        else:
-            monkeypatch.setenv("EIDOLON_AUDIT_TOKEN", value)
+    def _set(admin: str | None, auditor: str | None) -> None:
+        for name, val in (("EIDOLON_ADMIN_TOKEN", admin), ("EIDOLON_AUDIT_TOKEN", auditor)):
+            if val is None:
+                monkeypatch.delenv(name, raising=False)
+            else:
+                monkeypatch.setenv(name, val)
         get_settings.cache_clear()
 
     get_settings.cache_clear()
@@ -41,65 +44,80 @@ def client():
     return TestClient(app_module.app)
 
 
-# --- disabled (no token) -> open, dev convenience -----------------------
-def test_open_when_no_token_configured(client, audit_token) -> None:
-    audit_token(None)
-    assert client.get("/audit").status_code == 200
+# --- open mode ----------------------------------------------------------
+def test_open_when_no_tokens(client, tokens) -> None:
+    tokens(None, None)
     assert client.get("/audit/chain").status_code == 200
-    assert client.get("/replay", params={"principal_id": "alice"}).status_code == 200
+    assert client.post("/keypair").status_code == 200  # control plane open too
+    who = client.get("/whoami").json()
+    assert who == {"role": "admin", "auth_enabled": False}
 
 
-# --- enabled, no credential -> rejected / login -------------------------
-def test_console_serves_login_when_unauthed(client, audit_token) -> None:
-    audit_token(TOKEN)
-    r = client.get("/audit")
-    assert r.status_code == 200  # page renders...
-    assert "Unlock" in r.text and "audit console" in r.text.lower()  # ...but it's the login
-
-
-def test_forensic_endpoints_401_without_credential(client, audit_token) -> None:
-    audit_token(TOKEN)
-    assert client.get("/audit/chain").status_code == 401
+# --- tokens set, no credential -----------------------------------------
+def test_no_credential_is_denied(client, tokens) -> None:
+    tokens(ADMIN, AUDIT)
+    assert client.get("/whoami").json() == {"role": None, "auth_enabled": True}
+    assert client.get("/audit/chain").status_code == 401           # forensic
+    assert client.post("/keypair").status_code == 401              # control plane
     assert client.get("/replay", params={"principal_id": "alice"}).status_code == 401
-    assert client.get("/audit/export.json", params={"principal_id": "alice"}).status_code == 401
-    assert client.get("/audit/export.csv", params={"principal_id": "alice"}).status_code == 401
 
 
-# --- enabled, Bearer header -> allowed ----------------------------------
-def test_bearer_token_grants_access(client, audit_token) -> None:
-    audit_token(TOKEN)
-    h = {"Authorization": f"Bearer {TOKEN}"}
+def test_browser_navigation_redirects_to_login(client, tokens) -> None:
+    tokens(ADMIN, AUDIT)
+    r = client.get("/audit", headers={"accept": "text/html"}, follow_redirects=False)
+    assert r.status_code == 303
+    assert r.headers["location"] == "/login"
+
+
+# --- auditor: read-only -------------------------------------------------
+def test_auditor_can_read_but_not_mutate(client, tokens) -> None:
+    tokens(ADMIN, AUDIT)
+    h = {"Authorization": f"Bearer {AUDIT}"}
     assert client.get("/audit/chain", headers=h).status_code == 200
     assert client.get("/replay", params={"principal_id": "alice"}, headers=h).status_code == 200
-    assert client.get("/audit/export.json", params={"principal_id": "alice"}, headers=h).status_code == 200
+    # control-plane mutations are admin-only
+    assert client.post("/keypair", headers=h).status_code == 401
+    assert client.post("/delegations/revoke", json={"delegation_id": "x"}, headers=h).status_code == 401
 
 
-def test_wrong_bearer_token_rejected(client, audit_token) -> None:
-    audit_token(TOKEN)
-    h = {"Authorization": "Bearer nope"}
-    assert client.get("/audit/chain", headers=h).status_code == 401
+# --- admin: full access -------------------------------------------------
+def test_admin_bearer_full_access(client, tokens) -> None:
+    tokens(ADMIN, AUDIT)
+    h = {"Authorization": f"Bearer {ADMIN}"}
+    assert client.get("/audit/chain", headers=h).status_code == 200
+    assert client.post("/keypair", headers=h).status_code == 200
+    assert client.get("/whoami", headers=h).json()["role"] == "admin"
 
 
-# --- login cookie flow (browser) ---------------------------------------
-def test_login_sets_cookie_then_console_and_data_work(client, audit_token) -> None:
-    audit_token(TOKEN)
-    # bad token first
-    assert client.post("/audit/login", json={"token": "wrong"}).status_code == 401
+def test_wrong_token_rejected(client, tokens) -> None:
+    tokens(ADMIN, AUDIT)
+    assert client.get("/audit/chain", headers={"Authorization": "Bearer nope"}).status_code == 401
 
-    r = client.post("/audit/login", json={"token": TOKEN})
-    assert r.status_code == 200 and r.json()["ok"] is True
-    assert "eidolon_audit" in r.cookies  # cookie issued (TestClient persists it)
 
-    # now the console serves the real page and data flows (cookie auto-sent)
-    assert "audit console" in client.get("/audit").text.lower()
+# --- browser cookie login ----------------------------------------------
+def test_login_cookie_flow(client, tokens) -> None:
+    tokens(ADMIN, AUDIT)
+    assert client.post("/login", json={"token": "wrong"}).status_code == 401
+
+    r = client.post("/login", json={"token": ADMIN})
+    assert r.status_code == 200 and r.json() == {"ok": True, "role": "admin"}
+    assert "eidolon_session" in r.cookies
+
+    assert client.post("/keypair").status_code == 200      # cookie auto-sent
     assert client.get("/audit/chain").status_code == 200
-    assert client.get("/replay", params={"principal_id": "alice"}).status_code == 200
 
 
-def test_logout_clears_cookie(client, audit_token) -> None:
-    audit_token(TOKEN)
-    client.post("/audit/login", json={"token": TOKEN})
+def test_auditor_cookie_is_read_only(client, tokens) -> None:
+    tokens(ADMIN, AUDIT)
+    assert client.post("/login", json={"token": AUDIT}).json()["role"] == "auditor"
     assert client.get("/audit/chain").status_code == 200
-    client.post("/audit/logout")
+    assert client.post("/keypair").status_code == 401
+
+
+def test_logout_clears_session(client, tokens) -> None:
+    tokens(ADMIN, AUDIT)
+    client.post("/login", json={"token": ADMIN})
+    assert client.get("/audit/chain").status_code == 200
+    client.post("/logout")
     client.cookies.clear()
     assert client.get("/audit/chain").status_code == 401

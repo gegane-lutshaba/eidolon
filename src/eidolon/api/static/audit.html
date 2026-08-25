@@ -156,8 +156,8 @@ $("load").addEventListener("click", loadLedger);
 $("pid").addEventListener("keydown", e => { if (e.key === "Enter") loadLedger(); });
 $("logout").addEventListener("click", async (e) => {
   e.preventDefault();
-  await fetch("/audit/logout", { method: "POST" });
-  window.location = "/audit";
+  await fetch("/logout", { method: "POST" });
+  window.location = "/login";
 });
 loadChain();
 </script>
