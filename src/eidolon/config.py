@@ -22,13 +22,16 @@ class Settings(BaseSettings):
     )
 
     # --- SAGE substrate ---------------------------------------------------
-    # backend: "memory" for the fast lane, "sage" to bind the live SDK.
-    sage_backend: Literal["memory", "sage"] = "memory"
+    # backend: "memory" for the fast lane, "postgres" for a persistent single
+    # box (docker compose), "sage" to bind the live BFT-consensus SDK.
+    sage_backend: Literal["memory", "postgres", "sage"] = "memory"
     sage_base_url: str = "http://localhost:8080"
     sage_agent_key_path: str = "~/.sage/agent.key"
     sage_ca_cert: str | None = None
     # Domain used to persist HORKOS attestations on the consensus ledger.
     sage_attestation_domain: str = "attestations"
+    # Postgres port: max most-recent memories per principal loaded before ranking.
+    sage_pg_recall_prefetch: int = 5000
 
     # --- ETHOS style engine (Claude) -------------------------------------
     anthropic_api_key: str | None = None
@@ -55,6 +58,20 @@ class Settings(BaseSettings):
     # --- Service ----------------------------------------------------------
     api_host: str = "127.0.0.1"
     api_port: int = 8000
+
+    # --- Operator auth (single tenant, two roles) ------------------------
+    # Two secrets grant two roles, accepted as `Authorization: Bearer <token>`
+    # or a login cookie:
+    #   EIDOLON_ADMIN_TOKEN -> "admin"   : full control plane (mint/revoke, approve…)
+    #   EIDOLON_AUDIT_TOKEN -> "auditor" : read-only forensic surface (/audit, /replay)
+    # Fail-closed: with either set, unauthenticated/insufficient access is denied.
+    # With NEITHER set the platform runs OPEN (localhost dev only) and warns once.
+    admin_token: str | None = None
+    audit_token: str | None = None
+    # Mark the session cookie Secure (HTTPS only). Enable behind a TLS proxy.
+    session_cookie_secure: bool = False
+    # Optional comma-separated Host allow-list (adds TrustedHostMiddleware).
+    trusted_hosts: str | None = None
 
 
 @lru_cache

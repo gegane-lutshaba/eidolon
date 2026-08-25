@@ -1,0 +1,134 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>EIDOLON — delegations</title>
+<style>
+  :root {
+    --bg:#0b0e14; --panel:#131824; --ink:#e6e9ef; --dim:#8a93a6; --line:#232b3a;
+    --green:#39d98a; --red:#ff6b6b; --cyan:#5cc8ff; --accent:#7c7bff;
+  }
+  * { box-sizing:border-box; }
+  body { margin:0; background:var(--bg); color:var(--ink);
+    font:15px/1.5 ui-sans-serif,system-ui,-apple-system,Segoe UI,Roboto,sans-serif; }
+  header { padding:22px 24px; border-bottom:1px solid var(--line);
+    display:flex; justify-content:space-between; align-items:center; gap:16px; flex-wrap:wrap; }
+  h1 { margin:0; font-size:20px; }
+  a { color:var(--cyan); text-decoration:none; }
+  main { max-width:900px; margin:0 auto; padding:24px; }
+  .panel { background:var(--panel); border:1px solid var(--line); border-radius:12px;
+    padding:18px; margin-bottom:18px; }
+  .panel h2 { margin:0 0 4px; font-size:16px; }
+  .panel .sub { color:var(--dim); font-size:13px; margin-bottom:12px; }
+  label { display:block; color:var(--dim); font-size:12.5px; margin:10px 0 5px; }
+  input, textarea { width:100%; background:var(--bg); border:1px solid var(--line); color:var(--ink);
+    border-radius:8px; padding:9px 11px; font-size:13px; font-family:ui-monospace,Menlo,monospace; }
+  textarea { min-height:120px; resize:vertical; }
+  button { margin-top:12px; background:var(--accent); color:#fff; border:0; border-radius:8px;
+    padding:10px 16px; font-weight:600; cursor:pointer; }
+  button.ghost { background:transparent; border:1px solid var(--line); color:var(--ink); }
+  button.danger { background:#3a1720; border:1px solid var(--red); color:var(--red); }
+  .out { margin-top:12px; background:var(--bg); border:1px solid var(--line); border-radius:8px;
+    padding:10px 12px; font-family:ui-monospace,Menlo,monospace; font-size:12px; white-space:pre-wrap;
+    word-break:break-word; max-height:280px; overflow:auto; }
+  .ok { color:var(--green); } .err { color:var(--red); }
+  .row { display:flex; gap:10px; align-items:flex-end; flex-wrap:wrap; }
+  .row > div { flex:1; min-width:200px; }
+</style>
+</head>
+<body>
+<header>
+  <h1>EIDOLON — delegations</h1>
+  <div><a href="/console">← control plane</a></div>
+</header>
+<main>
+  <div class="panel">
+    <h2>Generate identity</h2>
+    <div class="sub">An Ed25519 keypair for a principal or an agent. The signing key is shown once — store it safely.</div>
+    <button id="genBtn">Generate keypair</button>
+    <div class="out" id="genOut" style="display:none"></div>
+  </div>
+
+  <div class="panel">
+    <h2>Mint delegation</h2>
+    <div class="sub">Sign a bounded, revocable credential from a principal's signing key. Authority not granted here is denied.</div>
+    <label>Principal signing key (hex)</label>
+    <input id="mintKey" placeholder="signing key from the principal identity" />
+    <label>MintParams (JSON)</label>
+    <textarea id="mintParams"></textarea>
+    <button id="mintBtn">Mint</button>
+    <div class="out" id="mintOut" style="display:none"></div>
+  </div>
+
+  <div class="panel">
+    <h2>Attenuate delegation</h2>
+    <div class="sub">Derive a strictly-narrower child credential (subset scope/classes/window). Never widens authority.</div>
+    <div class="row">
+      <div><label>Parent delegation (JSON)</label><textarea id="attParent"></textarea></div>
+      <div><label>Subset MintParams (JSON)</label><textarea id="attSubset"></textarea></div>
+    </div>
+    <label>Signer signing key (hex)</label>
+    <input id="attKey" placeholder="signing key authorized to attenuate the parent" />
+    <button id="attBtn">Attenuate</button>
+    <div class="out" id="attOut" style="display:none"></div>
+  </div>
+
+  <div class="panel">
+    <h2>Revoke delegation</h2>
+    <div class="sub">Immediately revoke a credential by id. The next action under it is denied.</div>
+    <label>Delegation id</label>
+    <input id="revId" placeholder="delegation id (content hash)" />
+    <button class="danger" id="revBtn">Revoke</button>
+    <div class="out" id="revOut" style="display:none"></div>
+  </div>
+</main>
+<script>
+const $ = (id) => document.getElementById(id);
+function show(el, data, ok=true) { el.style.display="block"; el.className="out "+(ok?"ok":"err");
+  el.textContent = typeof data === "string" ? data : JSON.stringify(data, null, 2); }
+async function call(url, body) {
+  const r = await fetch(url, { method:"POST", headers:{"content-type":"application/json"},
+    body: body===undefined ? undefined : JSON.stringify(body) });
+  const data = await r.json().catch(() => ({}));
+  return { ok: r.ok, status: r.status, data };
+}
+
+$("genBtn").onclick = async () => {
+  const { ok, data } = await call("/keypair");
+  show($("genOut"), ok ? data : (data.detail||"error"), ok);
+  if (ok) {  // pre-fill a mint template using the generated identity
+    $("mintKey").value = data.signing_key;
+    $("mintParams").value = JSON.stringify({
+      principal_id: data.public_key, issued_to: data.public_key,
+      scope: { project: ["atlas"] }, permitted_classes: ["retrieve-context","draft-comm"],
+      exclusions: [], escalation_required: [], max_autonomy: "draft",
+      window: { not_before: null, not_after: null }
+    }, null, 2);
+  }
+};
+
+$("mintBtn").onclick = async () => {
+  let params; try { params = JSON.parse($("mintParams").value); }
+  catch (e) { return show($("mintOut"), "Invalid JSON in MintParams", false); }
+  const { ok, data } = await call("/delegations/mint", { signing_key: $("mintKey").value, params });
+  show($("mintOut"), ok ? data : (data.detail||data), ok);
+  if (ok) $("attParent").value = JSON.stringify(data, null, 2);
+};
+
+$("attBtn").onclick = async () => {
+  let parent, subset;
+  try { parent = JSON.parse($("attParent").value); subset = JSON.parse($("attSubset").value); }
+  catch (e) { return show($("attOut"), "Invalid JSON in parent or subset", false); }
+  const { ok, data } = await call("/delegations/attenuate",
+    { parent, subset, signing_key: $("attKey").value });
+  show($("attOut"), ok ? data : (data.detail||data), ok);
+};
+
+$("revBtn").onclick = async () => {
+  const { ok, data } = await call("/delegations/revoke", { delegation_id: $("revId").value });
+  show($("revOut"), ok ? data : (data.detail||data), ok);
+};
+</script>
+</body>
+</html>

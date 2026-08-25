@@ -1,0 +1,177 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>EIDOLON — audit console</title>
+<style>
+  :root {
+    --bg:#0b0e14; --panel:#131824; --ink:#e6e9ef; --dim:#8a93a6; --line:#232b3a;
+    --green:#39d98a; --amber:#f2b84b; --red:#ff6b6b; --cyan:#5cc8ff; --accent:#7c7bff;
+  }
+  * { box-sizing:border-box; }
+  body { margin:0; background:var(--bg); color:var(--ink);
+    font:15px/1.5 ui-sans-serif,system-ui,-apple-system,Segoe UI,Roboto,sans-serif; }
+  header { padding:28px 24px 18px; border-bottom:1px solid var(--line);
+    display:flex; justify-content:space-between; align-items:flex-end; gap:16px; flex-wrap:wrap; }
+  h1 { margin:0; font-size:22px; letter-spacing:.2px; }
+  .tag { color:var(--dim); margin-top:4px; }
+  a { color:var(--cyan); text-decoration:none; }
+  main { max-width:1000px; margin:0 auto; padding:24px; }
+  .controls { display:flex; gap:10px; align-items:center; flex-wrap:wrap; margin-bottom:16px; }
+  input { background:var(--panel); border:1px solid var(--line); color:var(--ink);
+    border-radius:8px; padding:9px 11px; font-size:14px; }
+  input#pid { min-width:280px; }
+  input#ac { min-width:150px; } input#lim { width:90px; }
+  button { background:var(--accent); color:#fff; border:0; border-radius:8px;
+    padding:10px 16px; font-weight:600; cursor:pointer; }
+  button.ghost { background:transparent; border:1px solid var(--line); color:var(--ink); }
+  button:disabled { opacity:.5; cursor:default; }
+  .bar { display:flex; gap:12px; align-items:center; flex-wrap:wrap; margin:6px 0 18px; }
+  .chip { background:var(--panel); border:1px solid var(--line); border-radius:999px;
+    padding:6px 12px; font-size:13px; color:var(--dim); display:flex; gap:8px; align-items:center; }
+  .dot { width:9px; height:9px; border-radius:50%; background:var(--dim); }
+  .dot.ok { background:var(--green); } .dot.bad { background:var(--red); } .dot.na { background:var(--dim); }
+  .exports { margin-left:auto; display:flex; gap:8px; }
+  .beat { background:var(--panel); border:1px solid var(--line); border-radius:12px;
+    padding:13px 15px; margin:9px 0; }
+  .beat .top { display:flex; justify-content:space-between; gap:12px; align-items:center; }
+  .beat .action { font-weight:650; }
+  .beat .meta { color:var(--dim); font-size:12.5px; margin-top:2px; }
+  .beat .judgment { font-size:13.5px; margin-top:8px; }
+  .beat .refs { color:var(--dim); font-size:12px; margin-top:6px; display:flex; gap:14px; flex-wrap:wrap; }
+  .badge { font-weight:700; font-size:12px; padding:4px 9px; border-radius:999px; white-space:nowrap; }
+  .b-AUTONOMOUS_ACT,.b-NOTIFY_ACT,.b-ACT { background:rgba(57,217,138,.15); color:var(--green); }
+  .b-DRAFT { background:rgba(92,200,255,.15); color:var(--cyan); }
+  .b-ESCALATE { background:rgba(242,184,75,.15); color:var(--amber); }
+  .b-DENY { background:rgba(255,107,107,.15); color:var(--red); }
+  .b-none { background:rgba(138,147,166,.15); color:var(--dim); }
+  .flag { color:var(--amber); }
+  .empty { color:var(--dim); padding:30px 0; text-align:center; }
+  code { color:var(--cyan); font-size:12px; }
+</style>
+</head>
+<body>
+<header>
+  <div>
+    <h1>EIDOLON — audit console</h1>
+    <div class="tag">Every governed action, attributable · replay · ledger integrity · compliance export</div>
+  </div>
+  <div><a href="/console">← control plane</a> · <a href="/">showcase</a> · <a href="#" id="logout">log out</a></div>
+</header>
+
+<main>
+  <div class="controls">
+    <input id="pid" placeholder="principal_id (Ed25519 public key)" />
+    <input id="ac" placeholder="action_class (optional)" />
+    <input id="lim" type="number" value="1000" title="limit" />
+    <button id="load">Load ledger</button>
+    <label class="voice" style="color:var(--dim);font-size:13px;display:flex;gap:6px;align-items:center">
+      <input type="checkbox" id="denialsOnly" style="width:auto" /> ⚠ denials &amp; attacks only
+    </label>
+  </div>
+
+  <div class="bar">
+    <span class="chip" id="chainChip"><span class="dot na" id="chainDot"></span><span id="chainText">ledger integrity: checking…</span></span>
+    <span class="chip" id="countChip" style="display:none"></span>
+    <span class="exports">
+      <a id="expJson"><button class="ghost" disabled>Export JSON</button></a>
+      <a id="expCsv"><button class="ghost" disabled>Export CSV</button></a>
+    </span>
+  </div>
+
+  <div id="timeline"><div class="empty">Enter a principal_id and load its attestation ledger.</div></div>
+</main>
+
+<script>
+const $ = (id) => document.getElementById(id);
+const esc = (s) => String(s ?? "").replace(/[&<>]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;"}[c]));
+
+async function loadChain() {
+  try {
+    const r = await fetch("/audit/chain");
+    const c = await r.json();
+    const dot = $("chainDot"), txt = $("chainText");
+    if (!c.supported) {
+      dot.className = "dot na";
+      txt.textContent = `ledger integrity: n/a (backend ${c.backend || "?"} — hash chain is a postgres feature)`;
+    } else if (c.ok) {
+      dot.className = "dot ok";
+      txt.innerHTML = `ledger intact — hash chain unbroken (${c.length} entries)`;
+    } else {
+      dot.className = "dot bad";
+      txt.innerHTML = `TAMPERED — chain broken at seq ${c.broken_at} of ${c.length}`;
+    }
+  } catch (e) { $("chainText").textContent = "ledger integrity: unavailable"; }
+}
+
+function levelClass(lvl) {
+  const known = ["AUTONOMOUS_ACT","NOTIFY_ACT","ACT","DRAFT","ESCALATE","DENY"];
+  return known.includes(lvl) ? "b-" + lvl : "b-none";
+}
+
+function beat(a) {
+  const lvl = a.autonomy_level || "none";
+  const conf = (a.confidence ?? null) === null ? "" : ` · confidence ${(+a.confidence).toFixed(2)}`;
+  const flag = a.would_have_escalated ? `<span class="flag">⚑ would have escalated</span>` : "";
+  return `<div class="beat">
+    <div class="top">
+      <div><span class="action">${esc(a.action)}</span>
+        <span class="meta"> — ${esc(a.action_class)}</span></div>
+      <span class="badge ${levelClass(lvl)}">${esc(lvl)}</span>
+    </div>
+    <div class="meta">${esc(a.timestamp)} · result: ${esc(a.result || "—")}${conf}${a.ethos_version ? " · ETHOS " + esc(a.ethos_version) : ""}</div>
+    ${a.judgment ? `<div class="judgment">${esc(a.judgment)}</div>` : ""}
+    <div class="refs">
+      <span>evidence: ${(a.evidence_refs || []).length} memor${(a.evidence_refs||[]).length===1?"y":"ies"}</span>
+      <span>delegation depth: ${(a.delegation_chain || []).length}</span>
+      ${flag}
+    </div>
+  </div>`;
+}
+
+async function loadLedger() {
+  const pid = $("pid").value.trim();
+  if (!pid) { $("pid").focus(); return; }
+  const ac = $("ac").value.trim();
+  const lim = $("lim").value || 1000;
+  const qs = new URLSearchParams({ principal_id: pid, limit: lim });
+  if (ac) qs.set("action_class", ac);
+
+  $("timeline").innerHTML = `<div class="empty">Loading…</div>`;
+  const r = await fetch("/replay?" + qs.toString());
+  let rows = await r.json();
+
+  // wire exports to the same (server-side) filter
+  $("expJson").href = "/audit/export.json?" + qs.toString();
+  $("expCsv").href  = "/audit/export.csv?"  + qs.toString();
+  document.querySelectorAll(".exports button").forEach(b => b.disabled = rows.length === 0);
+
+  // "denials & attacks" — refusals, escalations, and near-misses
+  const denialsOnly = $("denialsOnly").checked;
+  const isDenialOrAttack = (a) =>
+    ["DENY", "ESCALATE"].includes(a.autonomy_level) || a.would_have_escalated;
+  const shown = denialsOnly ? rows.filter(isDenialOrAttack) : rows;
+
+  $("countChip").style.display = "";
+  $("countChip").textContent = denialsOnly
+    ? `${shown.length} denial${shown.length===1?"":"s"} / attack${shown.length===1?"":"s"} of ${rows.length}`
+    : `${rows.length} governed action${rows.length===1?"":"s"}`;
+
+  $("timeline").innerHTML = shown.length
+    ? shown.map(beat).join("")
+    : `<div class="empty">${denialsOnly ? "No denials or attack attempts" : "No attestations"} for <code>${esc(pid)}</code>${ac ? " in class <code>"+esc(ac)+"</code>" : ""}.</div>`;
+}
+
+$("load").addEventListener("click", loadLedger);
+$("denialsOnly").addEventListener("change", loadLedger);
+$("pid").addEventListener("keydown", e => { if (e.key === "Enter") loadLedger(); });
+$("logout").addEventListener("click", async (e) => {
+  e.preventDefault();
+  await fetch("/logout", { method: "POST" });
+  window.location = "/login";
+});
+loadChain();
+</script>
+</body>
+</html>

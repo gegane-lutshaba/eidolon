@@ -1,4 +1,4 @@
-.PHONY: install up down test test-integration lint fmt typecheck run demo dashboard transcript gateway-demo hermes-case adversarial escalation subagent formal whitepaper-pdf clean
+.PHONY: install up down deploy deploy-tls deploy-down deploy-logs deploy-verify deploy-backup test test-integration lint fmt typecheck run demo dashboard transcript gateway-demo hermes-case adversarial escalation subagent formal whitepaper-pdf clean
 
 install:
 	uv sync --all-extras
@@ -11,6 +11,32 @@ up:
 
 down:
 	docker compose down
+
+# --- single-VPS deployment (app + Postgres-backed SAGE ledger) ---
+DEPLOY = docker compose -f docker-compose.deploy.yml
+
+deploy:
+	$(DEPLOY) up -d --build
+	@echo "EIDOLON is starting at http://localhost:$${EIDOLON_PORT:-8000}"
+
+# Production: also start Caddy (auto-HTTPS). Requires EIDOLON_DOMAIN in .env.
+deploy-tls:
+	$(DEPLOY) --profile tls up -d --build
+	@echo "EIDOLON + Caddy up for domain $${EIDOLON_DOMAIN:-localhost}"
+
+deploy-down:
+	$(DEPLOY) --profile tls down
+
+deploy-logs:
+	$(DEPLOY) logs -f eidolon
+
+# Verify the persisted attestation ledger is intact (hash chain unbroken).
+deploy-verify:
+	$(DEPLOY) exec eidolon python -m eidolon.sage.verify
+
+# Back up the Postgres database (memory + attestation ledger).
+deploy-backup:
+	./deploy/backup.sh
 
 # Fast lane: unit + property tests on the in-memory SAGE port. No node needed.
 test:

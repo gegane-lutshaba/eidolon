@@ -45,6 +45,11 @@ class EscalationQueue:
         return [r for r in self._items.values()
                 if r.principal_id == principal_id and r.status == EscalationStatus.PENDING]
 
+    def list_all_pending(self) -> list[EscalationRequest]:
+        """Every pending item across principals — the operator approval inbox."""
+        self.expire_stale()
+        return [r for r in self._items.values() if r.status == EscalationStatus.PENDING]
+
     def get(self, request_id: str) -> EscalationRequest | None:
         return self._items.get(request_id)
 

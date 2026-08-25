@@ -1,0 +1,16 @@
+# TLS termination + automatic HTTPS for EIDOLON.
+# EIDOLON_DOMAIN is injected from the environment (defaults to localhost).
+# Point your domain's DNS at this box; Caddy provisions a certificate on boot.
+{$EIDOLON_DOMAIN:localhost} {
+	encode gzip
+	# Forensic/operator app. Auth is enforced by EIDOLON itself (admin/auditor).
+	reverse_proxy eidolon:8000
+	header {
+		# Belt-and-suspenders headers (the app also sets these).
+		Strict-Transport-Security "max-age=63072000; includeSubDomains"
+		X-Content-Type-Options "nosniff"
+		X-Frame-Options "DENY"
+		Referrer-Policy "no-referrer"
+		-Server
+	}
+}

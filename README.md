@@ -146,11 +146,52 @@ The style engine (drafts/escalations) uses Claude (`claude-sonnet-4-6` by
 default). Without an API key it falls back to deterministic templates — **no
 judgment or authority decision ever depends on the LLM.**
 
+## Deploy on a single VPS
+
+One box, no consensus cluster. The `postgres` SAGE backend persists memory and
+the attestation ledger locally as an **append-only hash chain** — carrying
+SAGE's tamper-evidence onto a single host (any edit, deletion, or reorder breaks
+the chain and is caught by `make deploy-verify`).
+
+```bash
+# one-shot bootstrap of a fresh Ubuntu/Debian box (installs Docker, writes a
+# .env with generated secrets, brings the stack up; add EIDOLON_DOMAIN for TLS):
+sudo bash deploy/provision.sh
+
+# …or manually:
+cp .env.example .env        # set EIDOLON_DB_PASSWORD, EIDOLON_ADMIN_TOKEN, EIDOLON_AUDIT_TOKEN
+make deploy                 # Postgres + EIDOLON on :8000 (no TLS)
+make deploy-tls             # …+ Caddy auto-HTTPS (needs EIDOLON_DOMAIN)
+make deploy-verify          # recompute the ledger hash chain — proves it is intact
+make deploy-backup          # timestamped, gzipped pg_dump (see deploy/restore.sh)
+make deploy-logs            # tail the service
+make deploy-down            # stop
+```
+
+**Operator auth (fail-closed, single tenant, two roles).** `EIDOLON_ADMIN_TOKEN`
+grants the full control plane; `EIDOLON_AUDIT_TOKEN` grants a read-only forensic
+role (`/audit`, `/replay`). Both are accepted as `Authorization: Bearer <token>`
+(CI/SDK) or a login cookie (`POST /login`, browser). With **neither** set the
+platform runs open for localhost dev and warns loudly — set at least the admin
+token before exposing it. Behind the TLS proxy set
+`EIDOLON_SESSION_COOKIE_SECURE=true` (and optionally `EIDOLON_TRUSTED_HOSTS`).
+
+`docker-compose.deploy.yml` runs the FastAPI service against `pgvector/pgvector`;
+the `tls` profile adds **Caddy** (automatic HTTPS via `EIDOLON_DOMAIN`,
+`deploy/Caddyfile`). Backend is selected by `EIDOLON_SAGE_BACKEND` (`memory` ·
+`postgres` · `sage`); the full BFT-consensus substrate remains `sage`.
+(`docker-compose.yml` is unchanged — the SAGE + Postgres substrate for the
+integration-test lane, `make up`.)
+
 ## API surface
 
 `POST /keypair` · `POST /delegations/{mint,attenuate,revoke}` · `POST /heartbeat`
 · `POST /resolve` (the gate) · `GET|POST /escalations/{id}/{approve,deny}`
-(approval inbox) · `GET /replay` · `POST /capture/{ingest,ingest_multi}` ·
+(approval inbox) · `GET /replay` · `GET /audit` (console) ·
+`GET /audit/{chain,export.json,export.csv}` (integrity + compliance export) ·
+`POST /login` · `POST /logout` · `GET /whoami` · `GET /ready` ·
+`GET /console{,/delegations,/approvals}` (operator control plane) ·
+`POST /capture/{ingest,ingest_multi}` ·
 `POST /skills{,/run}` · `POST /coaching/report` · `GET /profiles/{id}` ·
 `GET /` (dashboard). See `eidolon.api.app`.
 

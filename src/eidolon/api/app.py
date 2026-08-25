@@ -20,10 +20,26 @@ This is a thin transport layer; all invariants live in the components.
 from __future__ import annotations
 
 import pathlib
+import time
 
-from fastapi import Body, FastAPI, HTTPException
-from fastapi.responses import HTMLResponse
+from fastapi import Body, FastAPI, HTTPException, Request
+from fastapi.responses import (
+    HTMLResponse,
+    JSONResponse,
+    PlainTextResponse,
+    RedirectResponse,
+    Response,
+)
 
+from eidolon.api import audit as audit_svc
+from eidolon.api.auth import (
+    SESSION_COOKIE,
+    auth_enabled,
+    current_role,
+    has_role,
+    required_role,
+    role_for_token,
+)
 from eidolon.basanos.certify import Certificate
 from eidolon.capture import ConsentGrant, connect, ingest, ingest_all, known_sources
 from eidolon.coaching import Aspiration, Coach
@@ -46,6 +62,7 @@ _STATIC = pathlib.Path(__file__).parent / "static"
 
 _runtime: Runtime | None = None
 _escalations = EscalationQueue()
+_login_hits: dict[str, list[float]] = {}  # ip -> recent login attempt times
 
 
 def runtime() -> Runtime:
@@ -53,6 +70,38 @@ def runtime() -> Runtime:
     if _runtime is None:
         _runtime = build_runtime()
     return _runtime
+
+
+@app.middleware("http")
+async def _gate_and_harden(request: Request, call_next):
+    """Central auth gate (path/method policy) + baseline security headers."""
+    needed = required_role(request.method, request.url.path)
+    if needed is not None:
+        role = current_role(request)
+        if not has_role(role, needed):
+            wants_html = request.method in ("GET", "HEAD") and "text/html" in request.headers.get(
+                "accept", ""
+            )
+            if role is None:
+                # Unauthenticated: send browsers to sign in, APIs a 401.
+                if wants_html:
+                    return RedirectResponse("/login", status_code=303)
+                return JSONResponse(
+                    {"detail": f"{needed} authentication required"},
+                    status_code=401,
+                    headers={"WWW-Authenticate": "Bearer"},
+                )
+            # Authenticated but under-privileged: 403, never a login loop.
+            return JSONResponse(
+                {"detail": f"{needed} role required (you are {role})"}, status_code=403
+            )
+    resp = await call_next(request)
+    resp.headers.setdefault("X-Content-Type-Options", "nosniff")
+    resp.headers.setdefault("X-Frame-Options", "DENY")
+    resp.headers.setdefault("Referrer-Policy", "no-referrer")
+    if runtime().settings.session_cookie_secure:
+        resp.headers.setdefault("Strict-Transport-Security", "max-age=63072000; includeSubDomains")
+    return resp
 
 
 @app.get("/health")
@@ -63,6 +112,80 @@ def health() -> dict:
         "sage_backend": rt.settings.sage_backend,
         "profile": f"{rt.profile.id}@{rt.profile.version}",
     }
+
+
+@app.get("/ready")
+def ready() -> Response:
+    """Readiness: for the postgres backend, confirm a live DB round-trip."""
+    rt = runtime()
+    try:
+        if rt.settings.sage_backend == "postgres":
+            from sqlalchemy import text
+
+            from eidolon.data.db import get_sessionmaker
+
+            with get_sessionmaker()() as s:
+                s.execute(text("SELECT 1"))
+        return JSONResponse({"ready": True})
+    except Exception as exc:  # noqa: BLE001 — readiness probe reports, never raises
+        return JSONResponse({"ready": False, "error": str(exc)}, status_code=503)
+
+
+# -- operator auth --------------------------------------------------------
+@app.get("/login", response_class=HTMLResponse)
+def login_page() -> str:
+    return (_STATIC / "login.html").read_text(encoding="utf-8")
+
+
+@app.post("/login")
+def login(request: Request, token: str = Body(..., embed=True)) -> Response:
+    ip = request.client.host if request.client else "?"
+    now = time.monotonic()
+    hits = [t for t in _login_hits.get(ip, []) if now - t < 300.0]
+    if len(hits) >= 10:
+        raise HTTPException(status_code=429, detail="too many attempts; try again shortly")
+    hits.append(now)
+    _login_hits[ip] = hits
+
+    role = role_for_token(token)
+    if role is None:
+        raise HTTPException(status_code=401, detail="invalid token")
+    resp = JSONResponse({"ok": True, "role": role})
+    resp.set_cookie(
+        SESSION_COOKIE, token,
+        httponly=True, samesite="lax",
+        secure=runtime().settings.session_cookie_secure,
+        max_age=43200, path="/",  # 12h
+    )
+    return resp
+
+
+@app.post("/logout")
+def logout() -> Response:
+    resp = JSONResponse({"ok": True})
+    resp.delete_cookie(SESSION_COOKIE, path="/")
+    return resp
+
+
+@app.get("/whoami")
+def whoami(request: Request) -> dict:
+    return {"role": current_role(request), "auth_enabled": auth_enabled()}
+
+
+# -- operator control-plane console (admin) -------------------------------
+@app.get("/console", response_class=HTMLResponse)
+def console_home() -> str:
+    return (_STATIC / "console.html").read_text(encoding="utf-8")
+
+
+@app.get("/console/delegations", response_class=HTMLResponse)
+def console_delegations() -> str:
+    return (_STATIC / "console_delegations.html").read_text(encoding="utf-8")
+
+
+@app.get("/console/approvals", response_class=HTMLResponse)
+def console_approvals() -> str:
+    return (_STATIC / "console_approvals.html").read_text(encoding="utf-8")
 
 
 # -- showcase dashboard ---------------------------------------------------
@@ -152,8 +275,14 @@ _esc_context: dict[str, tuple] = {}
 
 
 @app.get("/escalations")
-def list_escalations(principal_id: str) -> list[dict]:
-    return [r.model_dump(mode="json") for r in _escalations.list_pending(principal_id)]
+def list_escalations(principal_id: str | None = None) -> list[dict]:
+    """Pending approvals. Omit principal_id for the full operator inbox."""
+    items = (
+        _escalations.list_pending(principal_id)
+        if principal_id
+        else _escalations.list_all_pending()
+    )
+    return [r.model_dump(mode="json") for r in items]
 
 
 @app.post("/escalations/{request_id}/approve")
@@ -189,6 +318,50 @@ def replay(principal_id: str, action_class: str | None = None, limit: int = 1000
         ReplayFilter(principal_id=principal_id, action_class=action_class, limit=limit)
     )
     return [r.model_dump(mode="json") for r in records]
+
+
+# -- audit console (gated to auditor+ by the auth middleware) -------------
+@app.get("/audit", response_class=HTMLResponse)
+def audit_console() -> str:
+    """Session replay, chain integrity, export."""
+    return (_STATIC / "audit.html").read_text(encoding="utf-8")
+
+
+@app.get("/audit/chain")
+def audit_chain() -> dict:
+    """Attestation-ledger tamper-evidence status (hash chain on the postgres backend)."""
+    return audit_svc.chain_status(runtime().sage)
+
+
+@app.get("/audit/export.json")
+def audit_export_json(
+    principal_id: str, action_class: str | None = None, limit: int = 5000
+) -> Response:
+    bundle = audit_svc.evidence_bundle(
+        runtime().sage,
+        ReplayFilter(principal_id=principal_id, action_class=action_class, limit=limit),
+    )
+    from eidolon.common.canonical import canonical_json
+
+    return Response(
+        content=canonical_json(bundle),
+        media_type="application/json",
+        headers={"Content-Disposition": f'attachment; filename="eidolon-evidence-{principal_id}.json"'},
+    )
+
+
+@app.get("/audit/export.csv", response_class=PlainTextResponse)
+def audit_export_csv(
+    principal_id: str, action_class: str | None = None, limit: int = 5000
+) -> Response:
+    body = audit_svc.ledger_csv(
+        runtime().sage,
+        ReplayFilter(principal_id=principal_id, action_class=action_class, limit=limit),
+    )
+    return PlainTextResponse(
+        content=body,
+        headers={"Content-Disposition": f'attachment; filename="eidolon-ledger-{principal_id}.csv"'},
+    )
 
 
 @app.post("/capture/ingest")

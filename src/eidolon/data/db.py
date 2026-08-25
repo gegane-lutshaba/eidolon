@@ -32,5 +32,6 @@ def get_sessionmaker(url: str | None = None) -> sessionmaker:
 def init_db(url: str | None = None) -> None:
     # Import models so they register on Base.metadata before create_all.
     from eidolon.data import models  # noqa: F401
+    from eidolon.sage import pg_store  # noqa: F401  (SAGE port tables)
 
     Base.metadata.create_all(get_engine(url))
