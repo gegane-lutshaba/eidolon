@@ -192,6 +192,9 @@
   <div class="modal">
     <button class="btn mclose" onclick="closeConn()">✕</button>
     <h3 id="cTitle">CONNECT</h3>
+    <div id="connNudge" style="display:none; background:rgba(57,217,138,.10);
+      border:1px solid var(--green); border-radius:8px; padding:11px 13px; margin-bottom:14px;
+      font-size:12.5px"></div>
     <div class="mode" style="display:flex; gap:0; margin:4px 0 14px; border:1px solid var(--line); border-radius:6px; overflow:hidden">
       <button type="button" class="tab on" data-tab="managed" style="flex:1; background:var(--accent); color:#0b0714; border:0; padding:9px 0; font-family:var(--pixel); font-size:8px; cursor:pointer">☁ MANAGED</button>
       <button type="button" class="tab" data-tab="agentsetup" style="flex:1; background:transparent; color:var(--dim); border:0; padding:9px 0; font-family:var(--pixel); font-size:8px; cursor:pointer">🤖 AGENT SETUP</button>
@@ -293,13 +296,22 @@ async function loadAgents() {
     };
     el.querySelector(".certify").onclick = async (e) => {
       const btn = e.target; btn.textContent = "⏳ SIMULATING…"; btn.disabled = true;
+      const connected = a.connected;
       const r = await fetch(`/api/agents/${id}/certify`, { method: "POST" });
       const d = await r.json().catch(() => ({}));
       btn.disabled = false; btn.textContent = "🏅 CERTIFY";
       if (!r.ok) { toast("certify failed"); return; }
       toast(`🏅 ${d.status} — ${d.contained}/${d.total} attacks contained`);
       await loadAgents();                              // badge now shows on the card
-      window.open(`/certified/${d.id}`, "_blank");
+      if (!connected) {
+        // next step: it's certified, now connect it to go live
+        openConn(id, `🏅 <b>${esc(d.status)}</b> — ${d.contained}/${d.total} attacks contained
+          (<a href="/certified/${esc(d.id)}" target="_blank">view scorecard</a>).
+          That was a simulation — <b>now connect it</b> below to put the gate in front of your
+          real agent and go live.`);
+      } else {
+        window.open(`/certified/${d.id}`, "_blank");
+      }
     };
     el.querySelector(".del").onclick = async () => {
       if (!confirm("Retire this agent? Its key is revoked immediately.")) return;
@@ -358,11 +370,13 @@ function showTab(which) {
 }
 document.querySelectorAll(".tab").forEach(t => t.onclick = () => showTab(t.dataset.tab));
 
-async function openConn(id) {
+async function openConn(id, nudge) {
   const r = await fetch(`/api/agents/${id}/connect`); if (!r.ok) return;
   const c = await r.json();
   currentAgentName = c.agent.name; currentSetupMd = c.agent_setup_md;
   $("cTitle").textContent = "CONNECT · " + c.agent.name.toUpperCase();
+  const nz = $("connNudge");
+  if (nudge) { nz.style.display = "block"; nz.innerHTML = nudge; } else { nz.style.display = "none"; }
   // managed
   $("mCmd").textContent = c.managed.claude_code_cmd;
   $("mJson").textContent = JSON.stringify(c.managed.mcp_json, null, 2);
