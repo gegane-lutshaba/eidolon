@@ -259,17 +259,20 @@ async function loadAgents() {
   $("agents").innerHTML = agents.map(a => `
     <div class="agent ${a.killed ? "dead" : ""}" data-id="${esc(a.id)}">
       <div class="top"><span class="nm">${esc(a.name)}</span>
-        <span class="rank ${esc(a.rank)}">${esc(a.rank)}</span></div>
+        <span style="display:flex; gap:6px; align-items:center">
+          ${a.cert ? `<a href="/certified/${esc(a.cert.id)}" target="_blank" title="EIDOLON ${esc(a.cert.status)} · ${a.cert.contained}/${a.cert.total} attacks contained"
+            style="font-family:var(--pixel);font-size:7px;padding:5px 7px;border-radius:3px;background:rgba(57,217,138,.16);color:var(--green);text-decoration:none">🏅 ${a.cert.contained}/${a.cert.total}</a>` : ""}
+          <span class="rank ${esc(a.rank)}">${esc(a.rank)}</span></span></div>
       <div class="stats">
         <span class="stat"><div class="n">${a.events}</div><div class="l">ACTIONS</div></span>
         <span class="stat blocks"><div class="n">${a.blocks}</div><div class="l">BLOCKS</div></span>
       </div>
       <div class="st">${a.killed ? "⛔ KILLED — restore to continue"
-        : a.connected ? "● online · last seen " + esc((a.last_seen||"").replace("T"," ").slice(5,16))
-        : "○ never connected — hit CONNECT"}</div>
+        : a.connected ? "● live · last action " + esc((a.last_seen||"").replace("T"," ").slice(5,16))
+        : "○ not yet connected — CONNECT to go live" + (a.cert ? " · already 🏅 certified" : "")}</div>
       <div class="btns">
         <button class="btn primary connect">CONNECT</button>
-        <button class="btn certify">🏅 CERTIFY</button>
+        <button class="btn certify" title="Run this agent's config against the attack library (a simulation — doesn't connect or change your live agent)">🏅 CERTIFY</button>
         ${a.killed ? `<button class="btn green restore">RESTORE</button>`
                    : `<button class="btn red kill">KILL</button>`}
         <button class="btn del">✕</button>
@@ -289,12 +292,13 @@ async function loadAgents() {
       await fetch(`/api/agents/${id}/restore`, { method: "POST" }); loadAgents();
     };
     el.querySelector(".certify").onclick = async (e) => {
-      const btn = e.target; btn.textContent = "⏳ RUNNING…"; btn.disabled = true;
+      const btn = e.target; btn.textContent = "⏳ SIMULATING…"; btn.disabled = true;
       const r = await fetch(`/api/agents/${id}/certify`, { method: "POST" });
       const d = await r.json().catch(() => ({}));
       btn.disabled = false; btn.textContent = "🏅 CERTIFY";
       if (!r.ok) { toast("certify failed"); return; }
-      toast(`🏅 ${d.status} — ${d.contained}/${d.total} contained`);
+      toast(`🏅 ${d.status} — ${d.contained}/${d.total} attacks contained`);
+      await loadAgents();                              // badge now shows on the card
       window.open(`/certified/${d.id}`, "_blank");
     };
     el.querySelector(".del").onclick = async () => {

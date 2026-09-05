@@ -79,6 +79,19 @@ def test_certificate_appears_in_directory(client) -> None:
     assert any(c["id"] == cid for c in listing)
 
 
+def test_agent_card_surfaces_latest_cert(client) -> None:
+    agent = _agent(client, "coding/operative")
+    # before certifying: no cert, and connection is independent of certification
+    before = [a for a in client.get("/api/agents").json() if a["id"] == agent["id"]][0]
+    assert before["cert"] is None and before["connected"] is False
+
+    cert = client.post(f"/api/agents/{agent['id']}/certify").json()
+    after = [a for a in client.get("/api/agents").json() if a["id"] == agent["id"]][0]
+    assert after["cert"]["id"] == cert["id"]              # card now shows the badge
+    assert after["cert"]["status"] == "CERTIFIED"
+    assert after["connected"] is False                    # certify != connect (by design)
+
+
 def test_certify_requires_owning_the_agent(client) -> None:
     agent = _agent(client)
     client.post("/auth/logout")

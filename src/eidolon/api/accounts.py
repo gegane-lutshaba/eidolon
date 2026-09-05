@@ -352,7 +352,7 @@ def agent_keypair(sf, agent_id: str) -> dict | None:
 def list_agents(sf, org_id: str) -> list[dict]:
     from sqlalchemy import func, select
 
-    from eidolon.data.models import AgentRow, GatewayEventRow, GatewayRow
+    from eidolon.data.models import AgentRow, CertificationRow, GatewayEventRow, GatewayRow
 
     with sf() as s:
         agents = s.execute(select(AgentRow).where(AgentRow.org_id == org_id)
@@ -365,6 +365,10 @@ def list_agents(sf, org_id: str) -> list[dict]:
                 .where(GatewayEventRow.gateway_id == a.id,
                        GatewayEventRow.level.in_(["DENY", "KILLED"]))
             ).scalar() or 0
+            cert = s.execute(
+                select(CertificationRow).where(CertificationRow.agent_id == a.id)
+                .order_by(CertificationRow.created_at.desc()).limit(1)
+            ).scalars().first()
             d = _agent_dict(a)
             d.update({
                 "connected": gw is not None,
@@ -372,6 +376,8 @@ def list_agents(sf, org_id: str) -> list[dict]:
                 "last_seen": gw.last_seen.isoformat() if gw and gw.last_seen else None,
                 "events": gw.events if gw else 0,
                 "blocks": int(blocks),
+                "cert": {"id": cert.id, "status": cert.status,
+                         "contained": cert.contained, "total": cert.total} if cert else None,
             })
             out.append(d)
         return out
