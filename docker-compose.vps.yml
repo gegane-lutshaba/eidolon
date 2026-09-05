@@ -1,0 +1,26 @@
+# Co-hosting override: run EIDOLON behind an EXISTING reverse proxy on the
+# same host (another project's Caddy/nginx owning :80/:443).
+#
+#   docker network create eidolon-edge
+#   docker network connect eidolon-edge <your-proxy-container>
+#   docker compose -f docker-compose.deploy.yml -f docker-compose.vps.yml up -d --build
+#
+# Set EIDOLON_PORT=127.0.0.1:8010 in .env so the app is never published
+# publicly itself — the proxy reaches it as eidolon-eidolon-1:8000 over the
+# shared edge network. Example Caddy site block:
+#
+#   eidolon.example.com {
+#       encode zstd gzip
+#       reverse_proxy eidolon-eidolon-1:8000
+#   }
+#
+# NOTE: `docker network connect` on a running proxy container does not survive
+# that container being RECREATED (its own `compose up`) — re-run the connect,
+# or add the eidolon-edge network to the proxy's compose file permanently.
+services:
+  eidolon:
+    networks: [default, edge]
+networks:
+  edge:
+    external: true
+    name: eidolon-edge
