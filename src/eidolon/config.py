@@ -82,6 +82,11 @@ class Settings(BaseSettings):
     # a trusted reverse proxy that sets it (Caddy/nginx); off = spoofable.
     trust_proxy_headers: bool = False
 
+    # --- user accounts (self-hosted multi-user) ---------------------------
+    # Open signup for the hosted instance. Set an invite code to gate it.
+    signup_open: bool = True
+    invite_code: str | None = None
+
     # --- mission control (gateway reporting + live console) ---------------
     # Comma-separated API keys gateways use to report events (POST
     # /ingest/events). The admin token is also accepted. Empty = ingest closed

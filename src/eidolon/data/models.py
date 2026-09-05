@@ -123,6 +123,45 @@ class EscalationRow(Base):
     created_at: Mapped[_dt.datetime] = mapped_column(DateTime(timezone=True), default=_utcnow)
 
 
+class UserRow(Base):
+    """A platform account (self-hosted multi-user)."""
+
+    __tablename__ = "users"
+
+    id: Mapped[str] = mapped_column(String, primary_key=True)  # random urlsafe id
+    email: Mapped[str] = mapped_column(String, unique=True, index=True)
+    # "scrypt$<salt_hex>$<hash_hex>" (stdlib scrypt; no plaintext ever stored)
+    password_hash: Mapped[str] = mapped_column(String)
+    created_at: Mapped[_dt.datetime] = mapped_column(DateTime(timezone=True), default=_utcnow)
+
+
+class UserSessionRow(Base):
+    """A browser session for a user (revocable, expiring)."""
+
+    __tablename__ = "user_sessions"
+
+    token: Mapped[str] = mapped_column(String, primary_key=True)  # random urlsafe
+    user_id: Mapped[str] = mapped_column(String, index=True)
+    expires_at: Mapped[_dt.datetime] = mapped_column(DateTime(timezone=True))
+
+
+class AgentRow(Base):
+    """A user's registered agent: its gateway identity + reporting credential.
+
+    The agent's ``id`` doubles as the ``gateway_id`` its gateway reports under,
+    so ownership of gateways/events resolves through this table.
+    """
+
+    __tablename__ = "agents"
+
+    id: Mapped[str] = mapped_column(String, primary_key=True)  # "agt-<rand>"
+    user_id: Mapped[str] = mapped_column(String, index=True)
+    name: Mapped[str] = mapped_column(String)
+    preset: Mapped[str] = mapped_column(String, default="reader")  # authority preset
+    gateway_key: Mapped[str] = mapped_column(String, unique=True, index=True)
+    created_at: Mapped[_dt.datetime] = mapped_column(DateTime(timezone=True), default=_utcnow)
+
+
 class GatewayRow(Base):
     """A connected gateway (one governed agent connection) + its kill state."""
 

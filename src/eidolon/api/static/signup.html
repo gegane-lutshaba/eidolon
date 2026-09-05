@@ -1,0 +1,98 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>EIDOLON — new player</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap" rel="stylesheet" />
+<style>
+  :root {
+    --bg:#07090f; --panel:#0d1119; --ink:#d7e0ea; --dim:#7a8699; --line:#1c2533;
+    --green:#39d98a; --red:#ff5c5c; --cyan:#4fc7ff; --accent:#8b7bff;
+    --pixel:"Press Start 2P", monospace;
+  }
+  * { box-sizing:border-box; }
+  body { margin:0; background:var(--bg); color:var(--ink); min-height:100vh;
+    display:flex; align-items:center; justify-content:center;
+    font:14px/1.6 ui-monospace,Menlo,Consolas,monospace; }
+  body::before { content:""; position:fixed; inset:0; pointer-events:none; z-index:9;
+    background:repeating-linear-gradient(0deg, rgba(0,0,0,.16) 0 1px, transparent 1px 3px); }
+  a { color:var(--cyan); text-decoration:none; }
+  .card { background:var(--panel); border:1px solid var(--line); border-radius:12px;
+    padding:30px 28px; width:380px; }
+  .logo { font-family:var(--pixel); font-size:12px; color:var(--accent); margin-bottom:6px; }
+  .mode { display:flex; gap:0; margin:18px 0 20px; border:1px solid var(--line);
+    border-radius:6px; overflow:hidden; }
+  .mode button { flex:1; background:transparent; border:0; color:var(--dim); padding:10px 0;
+    font-family:var(--pixel); font-size:9px; cursor:pointer; }
+  .mode button.on { background:var(--accent); color:#0b0714; }
+  label { display:block; color:var(--dim); font-size:11px; margin:12px 0 6px;
+    letter-spacing:.5px; text-transform:uppercase; }
+  input { width:100%; background:var(--bg); border:1px solid var(--line); color:var(--ink);
+    border-radius:6px; padding:11px 12px; font-size:13px; font-family:inherit; }
+  input:focus { outline:none; border-color:var(--accent); }
+  .go { margin-top:20px; width:100%; font-family:var(--pixel); font-size:11px;
+    padding:14px 0; background:var(--green); color:#06130c; border:0; border-radius:5px;
+    cursor:pointer; box-shadow:0 5px 0 #1f9e5f; }
+  .go:hover { transform:translateY(2px); box-shadow:0 3px 0 #1f9e5f; }
+  .err { color:var(--red); font-size:12px; margin-top:12px; min-height:16px; }
+  .foot { margin-top:18px; font-size:12px; color:var(--dim); text-align:center; }
+  #inviteRow { display:none; }
+</style>
+</head>
+<body>
+  <form class="card" id="f">
+    <div class="logo">EIDOLON</div>
+    <div style="color:var(--dim); font-size:12.5px">Delegate authority to your agent —
+      exactly as much as you choose, and not one call more.</div>
+    <div class="mode">
+      <button type="button" id="mNew" class="on">NEW PLAYER</button>
+      <button type="button" id="mCont">CONTINUE</button>
+    </div>
+    <label for="email">Email</label>
+    <input id="email" type="email" autocomplete="email" required />
+    <label for="pw">Password</label>
+    <input id="pw" type="password" autocomplete="new-password" minlength="8" required />
+    <div id="inviteRow">
+      <label for="invite">Invite code</label>
+      <input id="invite" type="text" autocomplete="off" />
+    </div>
+    <button class="go" type="submit" id="go">▶ INSERT COIN</button>
+    <div class="err" id="err"></div>
+    <div class="foot"><a href="/">← back to title screen</a></div>
+  </form>
+<script>
+const $ = (id) => document.getElementById(id);
+let mode = "signup";
+function setMode(m) {
+  mode = m;
+  $("mNew").classList.toggle("on", m === "signup");
+  $("mCont").classList.toggle("on", m === "login");
+  $("go").textContent = m === "signup" ? "▶ INSERT COIN" : "▶ CONTINUE";
+  $("pw").autocomplete = m === "signup" ? "new-password" : "current-password";
+}
+$("mNew").onclick = () => setMode("signup");
+$("mCont").onclick = () => setMode("login");
+
+$("f").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  $("err").textContent = "";
+  const body = { email: $("email").value, password: $("pw").value };
+  if (mode === "signup" && $("invite").value) body.invite_code = $("invite").value;
+  const r = await fetch(mode === "signup" ? "/auth/signup" : "/auth/login", {
+    method: "POST", headers: { "content-type": "application/json" },
+    body: JSON.stringify(body),
+  });
+  if (r.ok) { window.location = "/app"; return; }
+  const d = await r.json().catch(() => ({}));
+  if (r.status === 403 && (d.detail || "").includes("invite")) {
+    $("inviteRow").style.display = "block";
+    $("err").textContent = "This instance is invite-only — enter your code.";
+  } else {
+    $("err").textContent = d.detail || (mode === "signup" ? "signup failed" : "wrong credentials");
+  }
+});
+</script>
+</body>
+</html>

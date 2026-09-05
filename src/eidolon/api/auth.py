@@ -28,6 +28,7 @@ from fastapi import Request
 from eidolon.config import Settings, get_settings
 
 SESSION_COOKIE = "eidolon_session"
+USER_COOKIE = "eidolon_user"
 
 _RANK = {"auditor": 1, "admin": 2}
 _log = logging.getLogger("eidolon.auth")
@@ -89,25 +90,33 @@ def has_role(role: str | None, minimum: str) -> bool:
 
 # -- centralized path policy --------------------------------------------
 # Exact paths that need no auth at all. /ingest/events authenticates itself
-# (gateway API key — a machine credential, not an operator role).
+# (gateway API key — a machine credential, not an operator role). The landing
+# page + user signup/login are public by design.
 _PUBLIC = {"/health", "/ready", "/login", "/logout", "/whoami", "/favicon.ico",
-           "/ingest/events"}
+           "/ingest/events", "/", "/signup", "/auth/signup", "/auth/login",
+           "/auth/logout", "/stats/public"}
+
+# Paths that require a signed-in USER (or the operator admin): the product app.
+_USER_PREFIX = ("/app", "/api/")
 
 # GET paths available to the read-only auditor role (and thus admin too):
 # the forensic surface, the showcase, and mission control (viewing). The
 # control plane (delegations, approvals, skills, kill switch) is admin-only.
-_AUDITOR_GET_EXACT = {"/", "/showcase", "/replay", "/gateways"}
+_AUDITOR_GET_EXACT = {"/showcase", "/replay", "/gateways"}
 _AUDITOR_GET_PREFIX = ("/audit", "/profiles", "/challenge", "/live")
 
 
 def required_role(method: str, path: str) -> str | None:
-    """The minimum role for (method, path). None = public.
+    """The minimum role for (method, path). None = public, "user" = a signed-in
+    account (or operator admin).
 
     Read/forensic surfaces are auditor+; everything else that mutates or drives
     the control plane is admin.
     """
     if path in _PUBLIC:
         return None
+    if path.startswith(_USER_PREFIX):
+        return "user"
     if path.startswith("/challenge"):
         # Driving the break-the-gate demo is not a control-plane mutation.
         # With EIDOLON_PUBLIC_CHALLENGE the demo is open to the internet —

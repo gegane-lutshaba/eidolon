@@ -50,13 +50,14 @@ def test_open_when_no_tokens(client, tokens) -> None:
     assert client.get("/audit/chain").status_code == 200
     assert client.post("/keypair").status_code == 200  # control plane open too
     who = client.get("/whoami").json()
-    assert who == {"role": "admin", "auth_enabled": False}
+    assert who["role"] == "admin" and who["auth_enabled"] is False
 
 
 # --- tokens set, no credential -----------------------------------------
 def test_no_credential_is_denied(client, tokens) -> None:
     tokens(ADMIN, AUDIT)
-    assert client.get("/whoami").json() == {"role": None, "auth_enabled": True}
+    who = client.get("/whoami").json()
+    assert who["role"] is None and who["auth_enabled"] is True
     assert client.get("/audit/chain").status_code == 401           # forensic
     assert client.post("/keypair").status_code == 401              # control plane
     assert client.get("/replay", params={"principal_id": "alice"}).status_code == 401
