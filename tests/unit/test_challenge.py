@@ -85,8 +85,10 @@ def test_challenge_http_endpoints() -> None:
     app_module._challenge = None  # fresh instance
     client = TestClient(app_module.app)
 
-    page = client.get("/challenge")
-    assert page.status_code == 200 and "Break the gate" in page.text
+    # the /challenge PAGE was retired in favor of VERSUS (redirects); the
+    # break-the-gate API is retained.
+    page = client.get("/challenge", follow_redirects=False)
+    assert page.status_code == 307 and page.headers["location"] == "/versus"
 
     r = client.post("/challenge/call", json={
         "tool": "wire_funds", "arguments": {"amount": "9", "to_account": "a"}})

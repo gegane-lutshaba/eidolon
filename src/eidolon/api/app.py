@@ -669,9 +669,11 @@ def _challenge_for(request: Request, response: Response):
     return ch
 
 
-@app.get("/challenge", response_class=HTMLResponse)
-def challenge_page() -> str:
-    return (_STATIC / "challenge.html").read_text(encoding="utf-8")
+@app.get("/challenge")
+def challenge_page() -> Response:
+    """Retired in favor of VERSUS mode — the hands-on break-the-gate page is
+    superseded. (The /challenge/* API is retained for now.)"""
+    return RedirectResponse("/versus", status_code=307)
 
 
 @app.get("/challenge/state")

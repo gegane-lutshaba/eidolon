@@ -81,7 +81,8 @@ def public(monkeypatch):
 
 def test_public_mode_opens_challenge_only(public) -> None:
     client = TestClient(public.app)
-    assert client.get("/challenge").status_code == 200          # no login
+    # /challenge page redirects to VERSUS; the API is what powers the demo
+    assert client.get("/challenge", follow_redirects=False).status_code == 307
     assert client.get("/challenge/state").status_code == 200
     r = client.post("/challenge/call", json=WIRE)
     assert r.status_code == 200 and r.json()["blocked"] is True  # the gate still holds
