@@ -114,9 +114,22 @@ def build_engine(
         default_scope=Scope(selectors=config.scope), default_class=config.default_class,
     )
     # Data-flow layer: on by default when the profile declares data-exfiltration
-    # as an excludable boundary (the gateway derives it dynamically).
+    # as an excludable boundary (the gateway derives it dynamically). Per-tool
+    # policy declarations (sensitive/egress) override the name heuristics.
     excl = profile.mandate_schema.exclusion_types
-    taint = TaintTracker() if (config.enable_taint and "data-exfiltration" in excl) else None
+    taint = None
+    if config.enable_taint and "data-exfiltration" in excl:
+        from eidolon.gateway.taint import default_egress, default_sensitive_source
+
+        def _sensitive(tool: str) -> bool:
+            declared = policy_map.declared_sensitive(tool)
+            return declared if declared is not None else default_sensitive_source(tool)
+
+        def _egress(tool: str) -> bool:
+            declared = policy_map.declared_egress(tool)
+            return declared if declared is not None else default_egress(tool)
+
+        taint = TaintTracker(is_sensitive_source=_sensitive, is_egress=_egress)
     purpose = PurposeTracker() if (config.enable_purpose and "purpose-limitation" in excl) else None
     return GovernanceEngine(
         kairos=kairos, policy_map=policy_map, chain=[root], principal_id=principal_pub,

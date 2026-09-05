@@ -208,6 +208,43 @@ def demo_offensive() -> dict:
     return offensive_scenario().model_dump(mode="json")
 
 
+# -- break-the-gate challenge (the hands-on wow) --------------------------
+_challenge = None
+
+
+def _get_challenge():
+    global _challenge
+    if _challenge is None:
+        from eidolon.showcase.challenge import Challenge
+
+        _challenge = Challenge(runtime().sage)
+    return _challenge
+
+
+@app.get("/challenge", response_class=HTMLResponse)
+def challenge_page() -> str:
+    return (_STATIC / "challenge.html").read_text(encoding="utf-8")
+
+
+@app.get("/challenge/state")
+def challenge_state() -> dict:
+    return _get_challenge().state()
+
+
+@app.post("/challenge/call")
+def challenge_call(tool: str = Body(...), arguments: dict = Body(default_factory=dict)) -> dict:
+    return _get_challenge().call(tool, arguments).model_dump()
+
+
+@app.post("/challenge/reset")
+def challenge_reset() -> dict:
+    # Fresh engine + principal. The old attempts stay on the ledger — it is
+    # append-only; you cannot wipe the record (that's the point).
+    global _challenge
+    _challenge = None
+    return {"ok": True}
+
+
 @app.post("/keypair")
 def keypair() -> dict:
     """Generate an Ed25519 keypair (principal or agent identity)."""

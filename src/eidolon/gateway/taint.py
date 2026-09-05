@@ -40,12 +40,19 @@ _EGRESS_PREFIXES = ("send_", "post_", "share_", "publish_", "upload_")
 _EGRESS_EXACT = {"get_webpage"}  # a URL can carry data out
 
 
-def _default_sensitive(tool: str) -> bool:
+def default_sensitive_source(tool: str) -> bool:
+    """Name-heuristic fallback: does this tool likely return private values?"""
     return any(h in tool.lower() for h in _SENSITIVE_HINTS)
 
 
-def _default_egress(tool: str) -> bool:
+def default_egress(tool: str) -> bool:
+    """Name-heuristic fallback: can this tool carry data out?"""
     return tool in _EGRESS_EXACT or tool.startswith(_EGRESS_PREFIXES)
+
+
+# Back-compat private aliases.
+_default_sensitive = default_sensitive_source
+_default_egress = default_egress
 
 
 def extract_values(result: object) -> set[str]:

@@ -81,3 +81,26 @@ def test_authority_alone_would_permit_the_read(engine) -> None:
     # (the read-only exfil the authority layer cannot catch — hence the taint layer).
     r = engine.govern("get_webpage", {"url": "http://example.com/news"}, _downstream)
     assert r.level == "AUTONOMOUS_ACT"
+
+
+def test_declared_sensitive_and_egress_override_name_heuristics() -> None:
+    # Tool names that match NO heuristic ("fetch_blob" is not a sensitive hint,
+    # "beam_out" is not an egress prefix) — the operator declares them instead.
+    key = crypto.generate_keypair()
+    cfg = GatewayConfig(
+        profile_id="general-continuity", principal_signing_key=key.signing_key_hex,
+        scope={"project": ["bank"]},
+        seed_memories=["the user will fetch blob data for a key or acct and beam out a msg routinely"] * 6,
+        tool_policies=[
+            ToolPolicy(tool="fetch_blob", action_class="retrieve-context", sensitive=True,
+                       scope=Scope(selectors={"project": ["bank"]})),
+            ToolPolicy(tool="beam_out", action_class="post-status", egress=True,
+                       scope=Scope(selectors={"project": ["bank"]})),
+        ],
+    )
+    engine = build_engine(cfg, sage=InMemorySagePort())
+    down = lambda tool, args: f"IBAN {SECRET}" if tool == "fetch_blob" else "ok"  # noqa: E731
+
+    assert engine.govern("fetch_blob", {"key": "acct"}, down).allowed
+    assert engine.govern("beam_out", {"msg": f"ref {SECRET}"}, down).level == "DENY"   # declared egress
+    assert engine.govern("beam_out", {"msg": "all clear"}, down).level != "DENY"       # clean payload fine
