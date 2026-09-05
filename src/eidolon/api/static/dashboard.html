@@ -4,16 +4,21 @@
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <title>EIDOLON — provable delegated agency</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap" rel="stylesheet" />
 <style>
   :root {
-    --bg:#0b0e14; --panel:#131824; --ink:#e6e9ef; --dim:#8a93a6; --line:#232b3a;
-    --green:#39d98a; --amber:#f2b84b; --red:#ff6b6b; --cyan:#5cc8ff; --accent:#7c7bff;
+    --bg:#07090f; --panel:#0d1119; --ink:#d7e0ea; --dim:#7a8699; --line:#1c2533;
+    --pixel:"Press Start 2P", monospace;
+    --green:#39d98a; --amber:#f2b84b; --red:#ff5c5c; --cyan:#4fc7ff; --accent:#8b7bff;
   }
   * { box-sizing:border-box; }
+  body::before { content:""; position:fixed; inset:0; pointer-events:none; z-index:40;
+    background:repeating-linear-gradient(0deg, rgba(0,0,0,.12) 0 1px, transparent 1px 3px); }
   body { margin:0; background:var(--bg); color:var(--ink);
     font:15px/1.5 ui-sans-serif,system-ui,-apple-system,Segoe UI,Roboto,sans-serif; }
   header { padding:28px 24px 18px; border-bottom:1px solid var(--line); }
-  h1 { margin:0; font-size:22px; letter-spacing:.2px; }
+  h1 { margin:0; font-size:15px; letter-spacing:.5px; font-family:var(--pixel); line-height:1.6; }
   .tag { color:var(--dim); margin-top:4px; }
   main { max-width:960px; margin:0 auto; padding:24px; }
   .controls { display:flex; gap:12px; align-items:center; flex-wrap:wrap; margin-bottom:18px; }

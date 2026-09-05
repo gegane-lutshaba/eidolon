@@ -1,0 +1,173 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>EIDOLON — the white paper</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap" rel="stylesheet" />
+<style>
+  :root { --bg:#07090f; --panel:#0d1119; --ink:#d7e0ea; --dim:#7a8699; --line:#1c2533;
+    --green:#39d98a; --amber:#f2b84b; --red:#ff5c5c; --cyan:#4fc7ff; --accent:#8b7bff;
+    --pixel:"Press Start 2P", monospace; }
+  * { box-sizing:border-box; }
+  body { margin:0; background:var(--bg); color:var(--ink);
+    font:15px/1.75 ui-monospace,"SF Mono",Menlo,Consolas,monospace; }
+  body::before { content:""; position:fixed; inset:0; pointer-events:none; z-index:40;
+    background:repeating-linear-gradient(0deg, rgba(0,0,0,.13) 0 1px, transparent 1px 3px); }
+  a { color:var(--cyan); text-decoration:none; }
+  header { padding:16px 22px; border-bottom:1px solid var(--line); display:flex;
+    justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px; }
+  .logo { font-family:var(--pixel); font-size:12px; color:var(--accent); }
+  main { max-width:820px; margin:0 auto; padding:30px 22px 60px; }
+  .byline { text-align:center; color:var(--dim); font-size:13px; margin-bottom:8px; }
+  .byline b { color:var(--accent); font-family:var(--pixel); font-size:11px; }
+  /* rendered markdown */
+  .md h1 { font-family:var(--pixel); font-size:18px; line-height:1.7; margin:26px 0 14px; }
+  .md h2 { font-family:var(--pixel); font-size:12px; color:var(--amber); margin:30px 0 12px;
+    padding-top:14px; border-top:1px solid var(--line); line-height:1.7; }
+  .md h2::before { content:"▸ "; color:var(--dim); }
+  .md h3 { font-family:var(--pixel); font-size:10px; color:var(--cyan); margin:20px 0 8px; line-height:1.7; }
+  .md p, .md li { color:#c3cddb; }
+  .md strong { color:var(--ink); }
+  .md code { background:#0a0c11; color:var(--green); padding:2px 5px; border-radius:4px; font-size:13px; }
+  .md pre { background:#0a0c11; border:1px solid var(--line); border-radius:8px; padding:12px;
+    overflow-x:auto; } .md pre code { background:none; }
+  .md a { color:var(--cyan); } .md blockquote { border-left:3px solid var(--accent);
+    margin:12px 0; padding:2px 14px; color:var(--dim); }
+  .md table { width:100%; border-collapse:collapse; margin:14px 0; font-size:13px; display:block; overflow-x:auto; }
+  .md th, .md td { border:1px solid var(--line); padding:6px 9px; text-align:left; }
+  .md th { background:var(--panel); color:var(--ink); }
+  .md img { max-width:100%; border:1px solid var(--line); border-radius:8px; }
+  /* credits */
+  .credits { margin-top:50px; border-top:2px solid var(--accent); padding-top:26px; }
+  .credits h2 { font-family:var(--pixel); font-size:13px; color:var(--accent); text-align:center;
+    margin-bottom:6px; animation:blink 1.6s steps(2) infinite; }
+  @keyframes blink { 50% { opacity:.5; } }
+  .ctag { text-align:center; color:var(--dim); font-size:12px; margin-bottom:26px; }
+  .char { display:flex; gap:18px; align-items:flex-start; background:var(--panel);
+    border:1px solid var(--line); border-radius:12px; padding:18px; margin:14px 0; }
+  .char canvas { image-rendering:pixelated; width:112px; height:112px; flex-shrink:0;
+    background:#05070c; border:1px solid var(--line); border-radius:8px; }
+  .char .role { font-family:var(--pixel); font-size:10px; }
+  .char .nm { font-family:var(--pixel); font-size:13px; margin:8px 0; }
+  .char .bio { color:#c3cddb; font-size:13px; }
+  .char .links { margin-top:8px; font-size:12.5px; }
+  .g1 .role { color:var(--accent); } .g2 .role { color:var(--amber); }
+  .pdf { display:inline-block; margin-top:6px; font-family:var(--pixel); font-size:9px;
+    padding:10px 16px; background:var(--panel); border:1px solid var(--line); border-radius:6px; }
+  footer { text-align:center; color:var(--dim); font-size:12px; margin-top:40px; }
+</style>
+</head>
+<body>
+<header>
+  <span class="logo">EIDOLON <span style="color:var(--dim);font-size:9px">WHITE PAPER</span></span>
+  <span style="font-size:12.5px"><a href="/">title</a> · <a href="/versus">versus</a> ·
+    <a href="/challenge">arcade</a> · <a href="/signup">insert coin</a></span>
+</header>
+<main>
+  <div class="byline">a technical brief by <b>GEGANE</b> · built on SAGE</div>
+  <div class="md" id="md">loading…</div>
+
+  <div class="credits">
+    <h2>★ CREDITS ★</h2>
+    <div class="ctag">the two-player co-op behind EIDOLON</div>
+
+    <div class="char g1">
+      <canvas id="cGegane" width="16" height="16"></canvas>
+      <div>
+        <div class="role">PLAYER 1 — CREATOR</div>
+        <div class="nm">GEGANE</div>
+        <div class="bio">Builder of EIDOLON. Works the seam where cryptography meets agents —
+          capability-based authority, attenuable delegation, tamper-evident attestation. Believes
+          an agent should be trusted the way you trust a colleague: with a scope, a receipt, and a
+          way to say stop. Ships fast, tests hard, argues with the gate (and loses — it's machine-checked).</div>
+        <div class="links">▸ <a href="/versus">try VERSUS</a> · ▸ <a href="https://gitlab.com/mthandazogegane/eidolon" target="_blank" rel="noopener">source</a></div>
+        <a class="pdf" href="https://gitlab.com/mthandazogegane/eidolon/-/blob/main/docs/whitepaper.pdf" target="_blank" rel="noopener">⬇ full PDF</a>
+      </div>
+    </div>
+
+    <div class="char g2">
+      <canvas id="cDawg" width="16" height="16"></canvas>
+      <div>
+        <div class="role">PLAYER 2 — POWERED BY</div>
+        <div class="nm">L33TDAWG · SAGE</div>
+        <div class="bio">EIDOLON stands on <a href="https://github.com/l33tdawg/sage" target="_blank" rel="noopener">SAGE</a>
+          — l33tdawg's BFT-consensus memory substrate. SAGE became the memory layer agents plug into;
+          EIDOLON is the authority layer with the same shape. Attestations live as consensus-committed
+          memories; the record's content hash is the ledger hash. Good dawg. Best boy. Guards the vault.</div>
+        <div class="links">▸ <a href="https://github.com/l33tdawg/sage" target="_blank" rel="noopener">github.com/l33tdawg/sage</a></div>
+      </div>
+    </div>
+  </div>
+  <footer>INSERT COIN TO CONTINUE · <a href="/signup">▶ PRESS START</a></footer>
+</main>
+
+<script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+<script>
+// --- render the paper ---------------------------------------------------
+(async () => {
+  try {
+    const md = await (await fetch("/paper/content")).text();
+    document.getElementById("md").innerHTML = marked.parse(md);
+    // rewrite relative visual links to the repo raw host so images resolve
+    document.querySelectorAll(".md img").forEach(img => {
+      const s = img.getAttribute("src") || "";
+      if (s.startsWith("visuals/") || s.startsWith("./visuals/"))
+        img.src = "https://gitlab.com/mthandazogegane/eidolon/-/raw/main/docs/" + s.replace("./","");
+    });
+  } catch { document.getElementById("md").textContent = "White paper unavailable — see the PDF."; }
+})();
+
+// --- tiny pixel-art renderer -------------------------------------------
+function paint(id, rows, pal) {
+  const cv = document.getElementById(id), x = cv.getContext("2d");
+  rows.forEach((row, y) => [...row].forEach((ch, cx) => {
+    if (pal[ch]) { x.fillStyle = pal[ch]; x.fillRect(cx, y, 1, 1); }
+  }));
+}
+// GEGANE — hooded coder with cyan glasses
+paint("cGegane", [
+  "................",
+  "....PPPPPP......",
+  "...PPPPPPPP.....",
+  "..PPSSSSSSPP....",
+  "..PSssssssSP....",
+  "..PSsCCsCCsP....",  // glasses
+  "..PSsCCsCCsP....",
+  "..PSssssssSP....",
+  "..PSssmmssSP....",  // mouth
+  "..PPSssssSPP....",
+  "...PPPPPPPP.....",
+  "....AAAAAA......",  // hoodie collar
+  "...AAAAAAAA.....",
+  "..AA.AAAA.AA....",
+  "..A..AAAA..A....",
+  ".....AAAA......."
+], { P:"#5c4fd1", S:"#8b7bff", s:"#e8c9a0", C:"#4fc7ff", m:"#7a3b3b", A:"#2a2140" });
+
+// L33TDAWG — dog with green shades + tongue
+paint("cDawg", [
+  "................",
+  "..DD......DD....",
+  ".DDDD....DDDD...",  // ears
+  ".DDDDDDDDDDDD...",
+  "DDbbbbbbbbbbDD..",
+  "DbbGGGGGGGGbbD..",  // sunglasses band
+  "Dbb.GG..GG.bbD..",  // green lenses
+  "DbbbbbbbbbbbbD..",
+  ".DbbbNNNNbbbD...",  // snout
+  ".DbbbNNNNbbbD...",
+  "..DbbbNNbbbD....",
+  "...DbbTTbbD.....",  // tongue
+  "....DbTTbD......",
+  ".....DTTD.......",
+  "................",
+  "................"
+], { D:"#6b4a2a", b:"#8a6234", G:"#0f2a1a", ".":"", N:"#3a2817", T:"#ff5c7a" });
+// re-run dawg lenses in green (overlay)
+(function(){const x=document.getElementById("cDawg").getContext("2d");x.fillStyle="#39d98a";
+  x.fillRect(4,6,2,1);x.fillRect(8,6,2,1);})();
+</script>
+</body>
+</html>

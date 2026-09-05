@@ -17,6 +17,7 @@ WORKDIR /app
 # Project metadata + sources are needed to build the local package.
 COPY pyproject.toml uv.lock README.md ./
 COPY src ./src
+COPY docs/whitepaper.md ./docs/whitepaper.md
 
 # Resolve and install into /app/.venv. No dev deps; mcp powers the hosted
 # /mcp gateway tier (managed access).

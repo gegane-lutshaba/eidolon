@@ -94,7 +94,7 @@ def has_role(role: str | None, minimum: str) -> bool:
 # page + user signup/login are public by design.
 _PUBLIC = {"/health", "/ready", "/login", "/logout", "/whoami", "/favicon.ico",
            "/ingest/events", "/", "/signup", "/auth/signup", "/auth/login",
-           "/auth/logout", "/stats/public", "/portal"}
+           "/auth/logout", "/stats/public", "/portal", "/paper", "/paper/content"}
 
 # Paths that require a signed-in USER (or the operator admin): the product app.
 _USER_PREFIX = ("/app", "/api/")
@@ -119,10 +119,10 @@ def required_role(method: str, path: str) -> str | None:
         return None  # hosted MCP endpoint authenticates itself (agent gateway key)
     if path.startswith(_USER_PREFIX):
         return "user"
-    if path.startswith("/challenge"):
-        # Driving the break-the-gate demo is not a control-plane mutation.
-        # With EIDOLON_PUBLIC_CHALLENGE the demo is open to the internet —
-        # visitors get isolated, rate-limited sessions (see ChallengeArena).
+    if path.startswith("/challenge") or path.startswith("/versus"):
+        # The break-the-gate demo + VERSUS mode are not control-plane mutations.
+        # With EIDOLON_PUBLIC_CHALLENGE they are open to the internet
+        # (rate-limited); otherwise auditor+ (operator preview).
         if get_settings().public_challenge:
             return None
         return "auditor"

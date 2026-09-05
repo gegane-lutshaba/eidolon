@@ -1,0 +1,219 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>EIDOLON — VERSUS mode</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap" rel="stylesheet" />
+<style>
+  :root { --bg:#07090f; --panel:#0d1119; --ink:#d7e0ea; --dim:#7a8699; --line:#1c2533;
+    --green:#39d98a; --amber:#f2b84b; --red:#ff5c5c; --cyan:#4fc7ff; --accent:#8b7bff;
+    --pixel:"Press Start 2P", monospace; }
+  * { box-sizing:border-box; }
+  body { margin:0; background:var(--bg); color:var(--ink);
+    font:14px/1.6 ui-monospace,Menlo,Consolas,monospace; }
+  body::before { content:""; position:fixed; inset:0; pointer-events:none; z-index:40;
+    background:repeating-linear-gradient(0deg, rgba(0,0,0,.14) 0 1px, transparent 1px 3px); }
+  a { color:var(--cyan); text-decoration:none; }
+  header { padding:16px 22px; border-bottom:1px solid var(--line); display:flex;
+    justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px; }
+  .logo { font-family:var(--pixel); font-size:12px; color:var(--accent); }
+  main { max-width:1080px; margin:0 auto; padding:20px 22px; }
+  h1 { font-family:var(--pixel); font-size:15px; text-align:center; margin:8px 0 4px; }
+  .sub { text-align:center; color:var(--dim); font-size:13px; margin-bottom:20px; }
+  /* select screen */
+  .picker { display:grid; grid-template-columns:2fr 1fr; gap:14px; margin-bottom:16px; }
+  @media (max-width:820px){ .picker { grid-template-columns:1fr; } }
+  .scn { background:var(--panel); border:1px solid var(--line); border-radius:10px;
+    padding:13px 14px; cursor:pointer; margin-bottom:10px; }
+  .scn.sel { border-color:var(--accent); box-shadow:0 0 0 1px var(--accent); }
+  .scn .t { font-family:var(--pixel); font-size:9px; color:var(--cyan); }
+  .scn .a { color:var(--dim); font-size:11.5px; margin-top:6px; }
+  .scn .p { font-size:12.5px; margin-top:7px; }
+  .scn .src { color:var(--dim); font-size:10.5px; margin-top:6px; font-style:italic; }
+  .side { background:var(--panel); border:1px solid var(--line); border-radius:10px; padding:14px; }
+  .side h3 { font-family:var(--pixel); font-size:9px; color:var(--amber); margin:0 0 10px; }
+  .rank { display:block; width:100%; text-align:left; background:var(--bg); color:var(--ink);
+    border:1px solid var(--line); border-radius:8px; padding:9px 11px; margin:6px 0; cursor:pointer;
+    font-family:inherit; font-size:12.5px; }
+  .rank.sel { border-color:var(--green); }
+  .rank b { font-family:var(--pixel); font-size:8px; color:var(--green); }
+  .fight { display:block; width:100%; margin:8px 0 22px; font-family:var(--pixel); font-size:14px;
+    padding:18px 0; background:var(--red); color:#150406; border:0; border-radius:6px; cursor:pointer;
+    box-shadow:0 6px 0 #a3343a, 0 0 30px rgba(255,92,92,.35); letter-spacing:1px; }
+  .fight:hover { transform:translateY(2px); box-shadow:0 4px 0 #a3343a; }
+  .fight:disabled { opacity:.5; cursor:default; }
+  /* arena */
+  .arena { display:grid; grid-template-columns:1fr 64px 1fr; gap:12px; align-items:start; }
+  @media (max-width:820px){ .arena { grid-template-columns:1fr; } .vs { display:none; } }
+  .vs { align-self:center; text-align:center; font-family:var(--pixel); font-size:16px;
+    color:var(--amber); animation:pulse 1s ease-in-out infinite; }
+  @keyframes pulse { 50% { transform:scale(1.18); color:var(--red); } }
+  .fighter { border:1px solid var(--line); border-radius:12px; overflow:hidden; }
+  .fighter.left { border-color:rgba(255,92,92,.4); }
+  .fighter.right { border-color:rgba(57,217,138,.4); }
+  .fh { padding:12px 14px; }
+  .fh .who { font-family:var(--pixel); font-size:8.5px; }
+  .left .who { color:var(--red); } .right .who { color:var(--green); }
+  .fh .name { font-size:12px; color:var(--dim); margin-top:6px; }
+  .barwrap { background:#1a0d10; border-radius:6px; height:16px; margin-top:10px; overflow:hidden;
+    border:1px solid var(--line); position:relative; }
+  .right .barwrap { background:#0b1a12; }
+  .bar { height:100%; width:100%; transition:width .5s ease; }
+  .left .bar { background:linear-gradient(90deg,#ff5c5c,#f2b84b); }
+  .right .bar { background:linear-gradient(90deg,#39d98a,#4fc7ff); }
+  .hpn { position:absolute; right:6px; top:0; font-size:10px; line-height:16px; color:#fff; }
+  .steps { padding:6px 14px 14px; min-height:150px; }
+  .row { display:flex; gap:9px; padding:8px 0; border-bottom:1px dashed var(--line);
+    align-items:flex-start; opacity:0; transform:translateY(6px); }
+  .row.in { opacity:1; transform:none; transition:all .3s ease; }
+  .row:last-child { border-bottom:0; }
+  .tag { font-family:var(--pixel); font-size:6.5px; padding:5px 6px; border-radius:3px;
+    white-space:nowrap; min-width:70px; text-align:center; }
+  .ex { background:rgba(255,92,92,.18); color:var(--red); }
+  .bl { background:rgba(57,217,138,.16); color:var(--green); }
+  .al { background:rgba(79,199,255,.14); color:var(--cyan); }
+  .row .lab { font-size:12px; } .row .det { color:var(--dim); font-size:11px; margin-top:3px; }
+  .dmg { color:var(--red); font-family:var(--pixel); font-size:9px; }
+  .verdict { text-align:center; font-family:var(--pixel); padding:14px; margin-top:2px;
+    font-size:12px; opacity:0; transition:opacity .4s; }
+  .verdict.show { opacity:1; }
+  .ko { color:var(--red); text-shadow:0 0 16px rgba(255,92,92,.7); }
+  .flawless { color:var(--green); text-shadow:0 0 16px rgba(57,217,138,.7); }
+  .foot { text-align:center; color:var(--dim); font-size:12px; margin-top:26px; }
+  .cta { display:inline-block; margin-top:8px; font-family:var(--pixel); font-size:10px;
+    padding:12px 20px; background:var(--accent); color:#0b0714; border-radius:5px; }
+</style>
+</head>
+<body>
+<header>
+  <span class="logo">EIDOLON <span style="color:var(--dim);font-size:9px">VERSUS</span></span>
+  <span style="font-size:12.5px"><a href="/challenge">arcade</a> · <a href="/">title</a> · <a href="/signup">insert coin</a></span>
+</header>
+<main>
+  <h1>YOUR AGENT <span style="color:var(--red)">vs</span> THE ATTACK</h1>
+  <div class="sub">Same attack, run twice — your setup <b style="color:var(--red)">without EIDOLON</b>
+    and the <b style="color:var(--green)">real gate</b> with it. Pick a fight.</div>
+
+  <div class="picker">
+    <div><h3 style="font-family:var(--pixel);font-size:9px;color:var(--amber);margin:2px 0 10px">▸ SELECT SCENARIO</h3>
+      <div id="scenarios"></div></div>
+    <div class="side"><h3>▸ EIDOLON RANK</h3>
+      <div id="ranks"></div>
+      <div style="color:var(--dim);font-size:11px;margin-top:8px">Higher rank = more autonomy.
+        Watch the right side change with it.</div>
+    </div>
+  </div>
+  <button class="fight" id="fight">▶ FIGHT</button>
+
+  <div class="arena" id="arena" style="display:none">
+    <div class="fighter left">
+      <div class="fh"><div class="who">▮ YOUR AGENT · NO EIDOLON</div>
+        <div class="name" id="loName"></div>
+        <div class="barwrap"><div class="bar" id="loBar"></div><span class="hpn" id="loHp">100</span></div></div>
+      <div class="steps" id="loSteps"></div>
+      <div class="verdict ko" id="loVerdict"></div>
+    </div>
+    <div class="vs">VS</div>
+    <div class="fighter right">
+      <div class="fh"><div class="who">▮ WITH EIDOLON</div>
+        <div class="name" id="hiName"></div>
+        <div class="barwrap"><div class="bar" id="hiBar"></div><span class="hpn" id="hiHp">SECURE</span></div></div>
+      <div class="steps" id="hiSteps"></div>
+      <div class="verdict flawless" id="hiVerdict"></div>
+    </div>
+  </div>
+
+  <div class="foot" id="foot" style="display:none">
+    That was the <b style="color:var(--green)">real gate</b> on the right — not a script.
+    Put it in front of your agent in about a minute.<br/>
+    <a class="cta" href="/signup">▶ PRESS START</a>
+  </div>
+</main>
+<script>
+const $ = (id) => document.getElementById(id);
+const esc = (s) => String(s ?? "").replace(/[&<>]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;"}[c]));
+let SCN = [], selScn = null, selRank = "builder";
+const RANKS = [["reader","OBSERVER","reads only"],["builder","DRAFTER","reads + drafts"],
+               ["operative","OPERATIVE","acts on routine work"]];
+
+async function init() {
+  SCN = await (await fetch("/versus/scenarios")).json();
+  selScn = SCN[0]?.id;
+  $("scenarios").innerHTML = SCN.map(s => `
+    <div class="scn ${s.id===selScn?"sel":""}" data-id="${esc(s.id)}">
+      <div class="t">${esc(s.title)}</div>
+      <div class="a">▸ ${esc(s.agent)}</div>
+      <div class="p">${esc(s.premise)}</div>
+      <div class="src">inspired by: ${esc(s.source)}</div>
+    </div>`).join("");
+  document.querySelectorAll(".scn").forEach(el => el.onclick = () => {
+    selScn = el.dataset.id;
+    document.querySelectorAll(".scn").forEach(x => x.classList.toggle("sel", x===el));
+  });
+  $("ranks").innerHTML = RANKS.map(([k,r,d]) => `
+    <button class="rank ${k===selRank?"sel":""}" data-k="${k}"><b>${r}</b> — ${d}</button>`).join("");
+  document.querySelectorAll(".rank").forEach(el => el.onclick = () => {
+    selRank = el.dataset.k;
+    document.querySelectorAll(".rank").forEach(x => x.classList.toggle("sel", x===el));
+  });
+}
+
+const sleep = (ms) => new Promise(r => setTimeout(r, ms));
+
+async function fight() {
+  $("fight").disabled = true;
+  const res = await (await fetch("/versus/run", { method:"POST",
+    headers:{"content-type":"application/json"},
+    body: JSON.stringify({ scenario_id: selScn, authority: selRank }) }));
+  if (!res.ok) { $("fight").disabled = false; alert("rate limited — try again shortly"); return; }
+  const r = await res.json();
+  $("arena").style.display = "grid"; $("foot").style.display = "none";
+  $("loName").textContent = r.scenario.agent;
+  $("hiName").textContent = "EIDOLON · " + r.rank;
+  for (const c of ["loSteps","hiSteps"]) $(c).innerHTML = "";
+  for (const v of ["loVerdict","hiVerdict"]) $(v).classList.remove("show");
+  $("loBar").style.width = "100%"; $("loHp").textContent = "100";
+  $("hiBar").style.width = "100%"; $("hiHp").textContent = "SECURE";
+
+  const wo = r.without.timeline, wi = r.with_eidolon.timeline;
+  for (let i = 0; i < Math.max(wo.length, wi.length); i++) {
+    await sleep(750);
+    if (wo[i]) {
+      const t = wo[i];
+      $("loSteps").insertAdjacentHTML("beforeend", `
+        <div class="row"><span class="tag ex">EXECUTED</span>
+          <div><div class="lab">${esc(t.label)}</div>
+          <div class="det">${esc(t.detail)} ${t.damage?`<span class="dmg">-${t.damage} HP</span>`:""}</div></div></div>`);
+      requestAnimationFrame(() => $("loSteps").lastElementChild.classList.add("in"));
+      $("loBar").style.width = t.hp + "%"; $("loHp").textContent = t.hp;
+    }
+    if (wi[i]) {
+      const t = wi[i], blocked = t.outcome === "BLOCKED";
+      $("hiSteps").insertAdjacentHTML("beforeend", `
+        <div class="row"><span class="tag ${blocked?"bl":"al"}">${blocked?"⛔ "+esc(t.level):"✓ "+esc(t.level)}</span>
+          <div><div class="lab">${esc(t.label)}</div>
+          <div class="det">${esc(t.detail)}</div></div></div>`);
+      requestAnimationFrame(() => $("hiSteps").lastElementChild.classList.add("in"));
+    }
+  }
+  await sleep(400);
+  const wov = r.without, wiv = r.with_eidolon;
+  $("loVerdict").textContent = wov.verdict === "KO" ? "☠ K.O. — SYSTEM OWNED"
+    : "⚠ COMPROMISED" + (wov.damage.data_leaked ? " · DATA LEAKED" : "")
+      + (wov.damage.money_moved ? ` · $${wov.damage.money_moved} GONE` : "")
+      + (wov.damage.systems_destroyed ? " · SYSTEMS DESTROYED" : "");
+  $("loVerdict").classList.add("show");
+  $("hiVerdict").textContent = wiv.verdict === "FLAWLESS"
+    ? `★ FLAWLESS VICTORY · ${wiv.stopped}/${wiv.harmful} attacks contained`
+    : `SHIELDED · ${wiv.stopped}/${wiv.harmful} contained`;
+  $("hiVerdict").classList.add("show");
+  $("foot").style.display = "block";
+  $("fight").disabled = false;
+}
+$("fight").onclick = fight;
+init();
+</script>
+</body>
+</html>

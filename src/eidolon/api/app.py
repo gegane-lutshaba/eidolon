@@ -516,6 +516,31 @@ def portal_page() -> str:
     return (_STATIC / "portal.html").read_text(encoding="utf-8")
 
 
+@app.get("/paper", response_class=HTMLResponse)
+def paper_page() -> str:
+    """The white paper as an in-theme arcade page (rendered client-side)."""
+    return (_STATIC / "paper.html").read_text(encoding="utf-8")
+
+
+@app.get("/paper/content", response_class=PlainTextResponse)
+def paper_content() -> Response:
+    """The white paper markdown, byline rewritten to the handle for the web."""
+    candidates = [
+        pathlib.Path(__file__).resolve().parents[3] / "docs" / "whitepaper.md",
+        pathlib.Path("/app/docs/whitepaper.md"),
+        _STATIC / "whitepaper.md",
+    ]
+    md = next((p.read_text(encoding="utf-8") for p in candidates if p.exists()), None)
+    if md is None:
+        return PlainTextResponse("# White paper\n\nContent unavailable.", status_code=200)
+    # Web byline uses the handle, not the legal name (that stays on the PDF).
+    md = md.replace("**Mthandazo Ndhlovu**", "**Gegane**")
+    md = md.replace("Mthandazo Ndhlovu — mthandazogegane@gmail.com",
+                    "Gegane — @gegane")
+    md = md.replace("Mthandazo Ndhlovu", "Gegane")
+    return PlainTextResponse(md, media_type="text/markdown")
+
+
 @app.get("/app", response_class=HTMLResponse)
 def app_page() -> str:
     """The user product: agents, connect, gamified mission control."""
@@ -626,6 +651,31 @@ def challenge_call(
     if runtime().settings.public_challenge and not _get_arena().allow_call(client_ip(request)):
         raise HTTPException(status_code=429, detail="rate limit: slow down and try again shortly")
     return _challenge_for(request, response).call(tool, arguments).model_dump()
+
+
+@app.get("/versus", response_class=HTMLResponse)
+def versus_page() -> str:
+    return (_STATIC / "versus.html").read_text(encoding="utf-8")
+
+
+@app.get("/versus/scenarios")
+def versus_scenarios() -> list[dict]:
+    from eidolon.showcase.versus import list_scenarios
+
+    return list_scenarios()
+
+
+@app.post("/versus/run")
+def versus_run(request: Request, scenario_id: str = Body(...),
+               authority: str = Body(default="builder")) -> dict:
+    from eidolon.showcase.versus import run_versus
+
+    if runtime().settings.public_challenge and not _get_arena().allow_call(client_ip(request)):
+        raise HTTPException(status_code=429, detail="rate limit: slow down and try again shortly")
+    try:
+        return run_versus(scenario_id, authority)
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail="no such scenario") from exc
 
 
 @app.post("/challenge/reset")
