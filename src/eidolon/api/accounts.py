@@ -140,7 +140,8 @@ def user_for_session(sf, token: str | None) -> dict | None:
 
 # -- agents ---------------------------------------------------------------
 def create_agent(sf, user_id: str, name: str, preset: str) -> dict:
-    from eidolon.data.models import AgentRow
+    from eidolon.common import crypto
+    from eidolon.data.models import AgentKeyRow, AgentRow
 
     if preset not in PRESETS:
         raise ValueError(f"unknown preset {preset!r} (choose from {sorted(PRESETS)})")
@@ -148,10 +149,23 @@ def create_agent(sf, user_id: str, name: str, preset: str) -> dict:
     agent = AgentRow(id=f"agt-{secrets.token_urlsafe(8)}", user_id=user_id,
                      name=name, preset=preset,
                      gateway_key=f"egk_{secrets.token_urlsafe(24)}")
+    # Mint the agent's principal identity now so connect is paste-and-go
+    # (custodial v1; self-custody = swap the key in the yaml, delete the row).
+    kp = crypto.generate_keypair()
     with sf() as s:
         s.add(agent)
+        s.add(AgentKeyRow(agent_id=agent.id, public_hex=kp.public_key_hex,
+                          signing_hex=kp.signing_key_hex))
         s.commit()
         return _agent_dict(agent)
+
+
+def agent_keypair(sf, agent_id: str) -> dict | None:
+    from eidolon.data.models import AgentKeyRow
+
+    with sf() as s:
+        row = s.get(AgentKeyRow, agent_id)
+    return {"public": row.public_hex, "signing": row.signing_hex} if row else None
 
 
 def list_agents(sf, user_id: str) -> list[dict]:
@@ -230,3 +244,45 @@ def _agent_dict(a) -> dict:
             "rank": PRESETS.get(a.preset, {}).get("rank", "OBSERVER"),
             "gateway_key": a.gateway_key,
             "created_at": a.created_at.isoformat() if a.created_at else None}
+
+
+# -- paste-and-go gateway config ------------------------------------------
+# Sensible day-one tool policies for the most common first downstream (the MCP
+# filesystem server): reads flow at the preset's ceiling, writes are held —
+# the live feed demonstrates the gate instead of stonewalling the user.
+_FS_READ_TOOLS = ["read_file", "read_text_file", "read_multiple_files", "list_directory",
+                  "list_directory_with_sizes", "directory_tree", "search_files",
+                  "get_file_info", "list_allowed_directories"]
+_FS_WRITE_TOOLS = ["write_file", "edit_file", "create_directory", "move_file"]
+
+_SEEDS = [
+    "the user will read file contents and list directory entries for the project routinely",
+    "the user will search files and get file info in the project routinely",
+    "the user will draft comms and post status updates for the project routinely",
+]
+
+
+def build_connect_config(agent: dict, keypair: dict, base_url: str) -> dict:
+    """A complete GatewayConfig dict for this agent — parses and boots as-is."""
+    preset = PRESETS[agent["preset"]]
+    scope = {"project": ["workspace"]}
+    policies = [
+        {"tool": t, "action_class": "retrieve-context", "scope": {"selectors": scope}}
+        for t in _FS_READ_TOOLS
+    ] + [
+        {"tool": t, "action_class": "commit-action", "scope": {"selectors": scope}}
+        for t in _FS_WRITE_TOOLS
+    ]
+    return {
+        "profile_id": "general-continuity",
+        "principal_signing_key": keypair["signing"],
+        "scope": scope,
+        "permitted_classes": list(preset["permitted_classes"]),
+        "max_autonomy": preset["max_autonomy"],
+        "seed_memories": [s for s in _SEEDS for _ in range(6)],
+        "tool_policies": policies,
+        "report_url": base_url,
+        "report_key": agent["gateway_key"],
+        "gateway_id": agent["id"],
+        "agent_name": agent["name"],
+    }

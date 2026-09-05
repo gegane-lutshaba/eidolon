@@ -331,29 +331,31 @@ def api_restore_agent(request: Request, agent_id: str) -> dict:
 
 @app.get("/api/agents/{agent_id}/connect")
 def api_agent_connect(request: Request, agent_id: str) -> dict:
-    """Everything needed to put EIDOLON in front of this user's agent."""
+    """Everything needed to put EIDOLON in front of this user's agent —
+    paste-and-go: the yaml carries the minted principal key, the preset's
+    authority, day-one tool policies, and the reporting credential."""
+    import yaml as _yaml
+
     user = _req_user(request)
     agent = accounts_svc.get_agent(_live_store(), user["id"], agent_id)
     if agent is None:
         raise HTTPException(status_code=404, detail="no such agent")
+    keypair = accounts_svc.agent_keypair(_live_store(), agent_id)
+    if keypair is None:  # pre-keypair agents (or self-custody): placeholder
+        keypair = {"signing": "<paste your principal signing key (hex)>"}
     settings = runtime().settings
     base = (settings.public_url or "http://localhost:8000").rstrip("/")
     preset = accounts_svc.PRESETS[agent["preset"]]
-    gateway_yaml = (
-        f"# EIDOLON gateway config for {agent['name']} ({preset['rank']})\n"
-        f"profile_id: general-continuity\n"
-        f"principal_signing_key: \"<run: POST {base}/keypair, keep the signing key safe>\"\n"
-        f"max_autonomy: {preset['max_autonomy']}\n"
-        f"permitted_classes: {preset['permitted_classes']}\n"
-        f"scope: {{project: [\"default\"]}}\n"
-        f"report_url: {base}\n"
-        f"report_key: {agent['gateway_key']}\n"
-        f"gateway_id: {agent['id']}\n"
-        f"agent_name: {agent['name']}\n"
+    cfg = accounts_svc.build_connect_config(agent, keypair, base)
+    header = (
+        f"# EIDOLON gateway config — {agent['name']} · rank {preset['rank']}\n"
+        f"# Reads flow at your chosen ceiling; writes/sends are held or denied.\n"
+        f"# Tune tool_policies for your own tool servers (unmapped tools escalate).\n"
     )
+    gateway_yaml = header + _yaml.safe_dump(cfg, sort_keys=False, width=100)
     wrap_cmd = (
         "uv run python -m eidolon.gateway --config gateway.yaml \\\n"
-        "  -- <your MCP tool server command>"
+        "  -- npx -y @modelcontextprotocol/server-filesystem ."
     )
     mcp_json = {
         "mcpServers": {

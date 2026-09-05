@@ -162,6 +162,22 @@ class AgentRow(Base):
     created_at: Mapped[_dt.datetime] = mapped_column(DateTime(timezone=True), default=_utcnow)
 
 
+class AgentKeyRow(Base):
+    """An agent's principal keypair, minted at enrollment (custodial v1).
+
+    Kept in its own table (not a column on agents) so create_all provisions it
+    without migrations. The signing key lets the wizard emit a complete,
+    paste-and-go gateway.yaml; self-custody users can replace it in the yaml
+    and delete the row.
+    """
+
+    __tablename__ = "agent_keys"
+
+    agent_id: Mapped[str] = mapped_column(String, primary_key=True)
+    public_hex: Mapped[str] = mapped_column(String)
+    signing_hex: Mapped[str] = mapped_column(String)
+
+
 class GatewayRow(Base):
     """A connected gateway (one governed agent connection) + its kill state."""
 
