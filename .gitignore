@@ -9,7 +9,6 @@ dist/
 venv/
 
 # uv
-uv.lock
 
 # Env / secrets
 .env

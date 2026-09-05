@@ -15,12 +15,12 @@ COPY --from=ghcr.io/astral-sh/uv:0.4 /uv /uvx /bin/
 WORKDIR /app
 
 # Project metadata + sources are needed to build the local package.
-COPY pyproject.toml README.md ./
+COPY pyproject.toml uv.lock README.md ./
 COPY src ./src
 
 # Resolve and install into /app/.venv. No dev deps; mcp powers the hosted
 # /mcp gateway tier (managed access).
-RUN uv sync --no-dev --extra mcp
+RUN uv sync --frozen --no-dev --extra mcp
 
 COPY docker/entrypoint.sh /entrypoint.sh
 RUN chmod +x /entrypoint.sh
