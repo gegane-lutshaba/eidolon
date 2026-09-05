@@ -237,6 +237,7 @@ async function loadAgents() {
         : "○ never connected — hit CONNECT"}</div>
       <div class="btns">
         <button class="btn primary connect">CONNECT</button>
+        <button class="btn certify">🏅 CERTIFY</button>
         ${a.killed ? `<button class="btn green restore">RESTORE</button>`
                    : `<button class="btn red kill">KILL</button>`}
         <button class="btn del">✕</button>
@@ -254,6 +255,15 @@ async function loadAgents() {
     const rest = el.querySelector(".restore");
     if (rest) rest.onclick = async () => {
       await fetch(`/api/agents/${id}/restore`, { method: "POST" }); loadAgents();
+    };
+    el.querySelector(".certify").onclick = async (e) => {
+      const btn = e.target; btn.textContent = "⏳ RUNNING…"; btn.disabled = true;
+      const r = await fetch(`/api/agents/${id}/certify`, { method: "POST" });
+      const d = await r.json().catch(() => ({}));
+      btn.disabled = false; btn.textContent = "🏅 CERTIFY";
+      if (!r.ok) { toast("certify failed"); return; }
+      toast(`🏅 ${d.status} — ${d.contained}/${d.total} contained`);
+      window.open(`/certified/${d.id}`, "_blank");
     };
     el.querySelector(".del").onclick = async () => {
       if (!confirm("Retire this agent? Its key is revoked immediately.")) return;

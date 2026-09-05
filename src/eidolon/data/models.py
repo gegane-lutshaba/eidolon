@@ -192,6 +192,27 @@ class ContactLeadRow(Base):
     created_at: Mapped[_dt.datetime] = mapped_column(DateTime(timezone=True), default=_utcnow)
 
 
+class CertificationRow(Base):
+    """An EIDOLON certification: an agent config run against the VERSUS attack
+    library. Public certificates back a shareable badge + scorecard page."""
+
+    __tablename__ = "certifications"
+
+    id: Mapped[str] = mapped_column(String, primary_key=True)  # "cert-<rand>"
+    agent_id: Mapped[str | None] = mapped_column(String, index=True, nullable=True)
+    user_id: Mapped[str] = mapped_column(String, index=True, default="")
+    subject: Mapped[str] = mapped_column(String, default="")  # agent display name
+    kind: Mapped[str] = mapped_column(String, default="coding")
+    authority: Mapped[str] = mapped_column(String, default="builder")
+    rank: Mapped[str] = mapped_column(String, default="DRAFTER")
+    total: Mapped[int] = mapped_column(Integer, default=0)
+    contained: Mapped[int] = mapped_column(Integer, default=0)
+    status: Mapped[str] = mapped_column(String, default="CERTIFIED")  # CERTIFIED | PARTIAL
+    results: Mapped[dict] = mapped_column(JSON, default=dict)  # per-scenario scorecard
+    public: Mapped[bool] = mapped_column(default=True)
+    created_at: Mapped[_dt.datetime] = mapped_column(DateTime(timezone=True), default=_utcnow)
+
+
 class VersusRunRow(Base):
     """One VERSUS battle (aggregate meta: leaderboard + achievements)."""
 

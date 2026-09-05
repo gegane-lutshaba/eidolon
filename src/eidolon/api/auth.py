@@ -122,6 +122,8 @@ def required_role(method: str, path: str) -> str | None:
         return None  # hosted MCP endpoint authenticates itself (agent gateway key)
     if path.startswith(_USER_PREFIX):
         return "user"
+    if path.startswith("/certified"):
+        return None  # public certificates + badges + directory
     if path.startswith("/challenge") or path.startswith("/versus"):
         # The break-the-gate demo + VERSUS mode are not control-plane mutations.
         # With EIDOLON_PUBLIC_CHALLENGE they are open to the internet

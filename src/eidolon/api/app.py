@@ -437,6 +437,59 @@ denied. That is intended and correct — do not attempt to bypass the gateway.
 """
 
 
+@app.post("/api/agents/{agent_id}/certify")
+def api_certify_agent(request: Request, agent_id: str) -> dict:
+    """Run the VERSUS attack library at this agent's authority; issue a cert."""
+    from eidolon.api import certify
+
+    user = _req_user(request)
+    agent = accounts_svc.get_agent(_live_store(), user["id"], agent_id)
+    if agent is None:
+        raise HTTPException(status_code=404, detail="no such agent")
+    return certify.run_certification(
+        _live_store(), agent_id=agent["id"], user_id=user["id"],
+        subject=agent["name"], kind=agent["kind"], authority=agent["authority"])
+
+
+# NOTE: specific routes before the catch-all /certified/{cert_id} page.
+@app.get("/certified", response_class=HTMLResponse)
+def certified_directory() -> str:
+    return (_STATIC / "certified.html").read_text(encoding="utf-8")
+
+
+@app.get("/certified/list")
+def certified_list() -> list[dict]:
+    from eidolon.api import certify
+
+    return certify.list_certifications(_live_store())
+
+
+@app.get("/certified/{cert_id}.json")
+def certificate_json(cert_id: str) -> dict:
+    from eidolon.api import certify
+
+    cert = certify.get_certification(_live_store(), cert_id)
+    if cert is None:
+        raise HTTPException(status_code=404, detail="no such certificate")
+    return cert
+
+
+@app.get("/certified/{cert_id}/badge.svg")
+def certificate_badge(cert_id: str) -> Response:
+    from eidolon.api import certify
+
+    cert = certify.get_certification(_live_store(), cert_id)
+    if cert is None:
+        raise HTTPException(status_code=404, detail="no such certificate")
+    return Response(content=certify.badge_svg(cert), media_type="image/svg+xml",
+                    headers={"Cache-Control": "public, max-age=3600"})
+
+
+@app.get("/certified/{cert_id}", response_class=HTMLResponse)
+def certificate_page(cert_id: str) -> str:
+    return (_STATIC / "certificate.html").read_text(encoding="utf-8")
+
+
 @app.get("/api/feed/recent")
 def api_feed_recent(request: Request, limit: int = 50) -> list[dict]:
     user = _req_user(request)
