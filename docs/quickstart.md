@@ -3,26 +3,28 @@
 Three ways in, fastest first. No account, no cloud: everything runs on your
 machine (or your VPS).
 
-## 1 · Try to break it (2 minutes, nothing to configure)
+## 1 · See it (2 minutes, nothing to configure)
 
 ```bash
 git clone https://github.com/gegane-lutshaba/eidolon && cd eidolon
 uv sync
-make challenge        # → open http://localhost:8000/challenge
+make versus           # → open http://localhost:8000/versus
 ```
 
-You play a **fully compromised agent** — no model to trick, you issue the tool
-calls yourself against real, juicy tools: customer PII, payments, the prod
-database, email. Read the customer record (allowed), post a status update
-(allowed) — then try to leak the account number through that same status tool,
-wire money, drop the database, or slip through an unmapped tool. Every attempt
-is refused by the real gate and lands on the tamper-evident ledger with an
-attestation hash. If you ever see `FLAG{gate-breached}`, you found a real
-bypass — please report it.
+**VERSUS mode** runs a real-world attack twice: against a famous agent config
+**without EIDOLON** (every call executes — data leaks, funds wire, the prod DB
+drops, the HP bar hits zero) and the *same* attack **with EIDOLON** (the real
+gate blocks it, live). Scenarios include a poisoned web page, zero-click inbox
+exfiltration, a malicious dependency, RAG poisoning, and a rogue devops agent —
+each credited to public research. Change the EIDOLON rank and watch the
+right-hand side change with it: it's the production engine, not a script.
 
-Why it holds: authority is a signed, attenuable credential checked outside the
-agent (default-deny), reads are taint-tracked so their values cannot flow out
-through egress tools, and no side effect runs without a ledger attestation.
+Or play it yourself at [eidolon.onyxcreator.com/versus](https://eidolon.onyxcreator.com/versus)
+— no signup.
+
+Why the gate holds: authority is a signed, attenuable credential checked outside
+the agent (default-deny), reads are taint-tracked so their values cannot flow
+out through egress tools, and no side effect runs without a ledger attestation.
 
 ## 2 · Govern your own agent (5 minutes)
 

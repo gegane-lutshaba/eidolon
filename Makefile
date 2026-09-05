@@ -1,4 +1,4 @@
-.PHONY: challenge install up down deploy deploy-tls deploy-down deploy-logs deploy-verify deploy-backup test test-integration lint fmt typecheck run demo dashboard transcript gateway-demo hermes-case adversarial escalation subagent formal whitepaper-pdf clean
+.PHONY: versus install up down deploy deploy-tls deploy-down deploy-logs deploy-verify deploy-backup test test-integration lint fmt typecheck run demo dashboard transcript gateway-demo hermes-case adversarial escalation subagent formal whitepaper-pdf clean
 
 install:
 	uv sync --all-extras
@@ -67,9 +67,9 @@ demo:
 dashboard:
 	uv run uvicorn eidolon.api.app:app --host 127.0.0.1 --port 8000
 
-# Break-the-gate: play a fully compromised agent against the real gate.
-challenge:
-	@echo "→ open http://localhost:8000/challenge"
+# VERSUS: the same attack, your agent without EIDOLON vs the real gate with it.
+versus:
+	@echo "→ open http://localhost:8000/versus"
 	uv run uvicorn eidolon.api.app:app --host 127.0.0.1 --port 8000
 
 # Regenerate the committed transcript (deterministic voice).
