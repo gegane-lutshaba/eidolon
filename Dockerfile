@@ -18,8 +18,9 @@ WORKDIR /app
 COPY pyproject.toml README.md ./
 COPY src ./src
 
-# Resolve and install into /app/.venv. No dev deps in the image.
-RUN uv sync --no-dev
+# Resolve and install into /app/.venv. No dev deps; mcp powers the hosted
+# /mcp gateway tier (managed access).
+RUN uv sync --no-dev --extra mcp
 
 COPY docker/entrypoint.sh /entrypoint.sh
 RUN chmod +x /entrypoint.sh
