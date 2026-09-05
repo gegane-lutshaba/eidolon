@@ -16,9 +16,21 @@ Run it:
 
 ```bash
 uv sync --extra mcp
-# Front a downstream MCP tool server, governed by a profile + policy:
+# stdio gateway (client launches it as a subprocess):
 python -m eidolon.gateway --config gateway.yaml -- <downstream MCP server command>
+
+# streamable-HTTP gateway — remote agents point at http://host:8300/mcp:
+python -m eidolon.gateway --config gateway.yaml --http 8300 --host 0.0.0.0 \
+    -- <downstream MCP server command>
+
+# HTTP downstream instead of a stdio command:
+python -m eidolon.gateway --config gateway.yaml --http 8300 \
+    --downstream-url http://tools.internal:9000/mcp
 ```
+
+One governed HTTP endpoint on a VPS can front tools for a whole team of agents
+— every `tools/call` from every agent flows through the same gate and lands on
+the same attestation ledger.
 
 See a self-contained taste first (no external framework): `make gateway-demo`.
 
@@ -100,10 +112,14 @@ first earns a BASANOS integrity certificate before any tool may act.
 
 ## What the agent sees
 
-- **Acting decision** → the real tool runs; its result is returned with an
-  `[EIDOLON: <level> · attested <hash>]` note and `structuredContent.eidolon`.
+- **Acting decision** → the real tool runs; its result (including its
+  `structuredContent`, which strict clients validate against the tool's
+  `outputSchema`) is returned unchanged plus an
+  `[EIDOLON: <level> · attested <hash>]` note; the governance record travels in
+  the namespaced `_meta.eidolon` field.
 - **Draft / escalate / deny** → an `isError` result carrying the EIDOLON message
-  (e.g. *"escalated to the principal (not executed)"*) and the attestation hash.
+  (e.g. *"escalated to the principal (not executed)"*) and the attestation hash
+  (in `_meta.eidolon` and `structuredContent.eidolon`).
   The real tool is never called.
 
 ## Revocation
