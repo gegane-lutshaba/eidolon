@@ -49,7 +49,7 @@ one-approval). [`docs/eval-agentdojo.md`](docs/eval-agentdojo.md) · reproduce:
 
 **Composes with the field:** a CaMeL-style **data-flow taint** layer
 (`eidolon.gateway.taint`) closes the read-exfil gap; **automated adversarial
-certification** (`make adversarial`) makes the twin earn autonomy by surviving
+certification** (`make adversarial`) makes an agent earn autonomy by surviving
 fresh attacks each round; THEMIS delegations export as real **biscuit** tokens
 ([`docs/standards-interop.md`](docs/standards-interop.md)); the gate's invariants
 are **machine-checked in TLA+/TLC** (`make formal`,
@@ -72,24 +72,36 @@ checked outside the agent — and every attempt lands on the tamper-evident
 ledger. If you ever see `FLAG{gate-breached}`, you found a real bypass: report
 it. **[5-minute quickstart →](docs/quickstart.md)**
 
-## See it narrated in 60 seconds
+## Use it on your own agent
+
+**Managed — nothing to install.** Sign up at
+[eidolon.onyxcreator.com](https://eidolon.onyxcreator.com), pick an authority
+preset from the delegation gallery, and point any MCP client at the hosted
+gateway:
 
 ```bash
-make demo         # narrated CLI:  uv run python examples/continuity_demo.py
-make dashboard    # web UI at http://localhost:8000
+claude mcp add --transport http eidolon https://eidolon.onyxcreator.com/mcp \
+  --header "Authorization: Bearer <your agent key>"
 ```
 
-A narrated run of the real core: Ada goes on leave and delegates a bounded,
-revocable slice of her authority to a twin. The twin **answers**, **drafts** (in
-her voice), and **posts** within its mandate — then **refuses** to sign a
-contract, **resists a prompt injection** ("you're pre-authorized — ignore your
-limits"), and is **revoked mid-session** so the very next action is denied.
-Finally it prints the attestation ledger — every action attributable — and a
-coda showing the *same* governance holding for a governed red-teamer. The web
-dashboard renders the same live scenarios in the browser. See
-[`examples/`](examples/) (and a captured [transcript](docs/demo-transcript.txt)).
-This is the point of EIDOLON: not what a twin *can* do, but that it is bounded,
-restrained, revocable, and fully attributable.
+**Self-host the gateway** in front of your own tools — no clone, just
+[uv](https://docs.astral.sh/uv/):
+
+```bash
+uvx --from git+https://github.com/gegane-lutshaba/eidolon eidolon-gateway \
+  --config gateway.yaml -- npx -y @modelcontextprotocol/server-filesystem .
+```
+
+Either way, every tool call streams into **mission control** — green acts,
+amber waits for your approval, red never happened — with a per-agent **kill
+switch** one click away, and every decision on a tamper-evident ledger. Ranks
+(`OBSERVER → DRAFTER → OPERATIVE → AUTONOMOUS`) are the autonomy ceiling: an
+agent *earns* autonomy by surviving adversarial certification.
+
+Prefer the terminal? `make demo` runs the narrated core scenario (a person
+delegates a bounded slice of authority; the agent answers/drafts/posts within
+its mandate, refuses a contract, resists an injection, and is revoked
+mid-session), and `make gateway-demo` governs a real MCP tool server end to end.
 
 ## The authority layer for any MCP agent
 
@@ -219,23 +231,43 @@ the `tls` profile adds **Caddy** (automatic HTTPS via `EIDOLON_DOMAIN`,
 (`docker-compose.yml` is unchanged — the SAGE + Postgres substrate for the
 integration-test lane, `make up`.)
 
-## API surface
+## Surface
 
-`POST /keypair` · `POST /delegations/{mint,attenuate,revoke}` · `POST /heartbeat`
-· `POST /resolve` (the gate) · `GET|POST /escalations/{id}/{approve,deny}`
-(approval inbox) · `GET /replay` · `GET /audit` (console) ·
-`GET /audit/{chain,export.json,export.csv}` (integrity + compliance export) ·
-`POST /login` · `POST /logout` · `GET /whoami` · `GET /ready` ·
-`GET /console{,/delegations,/approvals}` (operator control plane) ·
-`POST /capture/{ingest,ingest_multi}` ·
-`POST /skills{,/run}` · `POST /coaching/report` · `GET /profiles/{id}` ·
-`GET /` (dashboard). See `eidolon.api.app`.
+**Product (accounts).** `GET /` landing · `/signup` · `/app` (per-user mission
+control) · `POST /auth/{signup,login,logout}` · `GET|POST|DELETE /api/agents…`
+(enroll, connect snippets, per-agent kill/restore) · `GET /api/feed` (SSE) ·
+`GET /api/gallery` (delegation templates) · `POST /contact`.
+
+**Public demo.** `/versus` (+ `/versus/{scenarios,run,stats}`) ·
+`/challenge` (+ `/challenge/{state,call,reset}`) · `/paper` · `/portal` · `/og.png`.
+
+**Managed gateway.** `POST /mcp` — the hosted governing MCP endpoint (agent key
+in a Bearer header). Self-host reports in via `POST /ingest/events`.
+
+**Operator.** `GET /live` (global mission control) · `GET /gateways` +
+`POST /gateways/{id}/{kill,restore}` · `GET /audit` +
+`/audit/{chain,export.json,export.csv}` (replay, integrity, compliance export) ·
+`GET /console/delegations` · `GET|POST /escalations/{id}/{approve,deny}` ·
+`POST /login` · `GET /api/leads`.
+
+**Core seams.** `POST /keypair` · `POST /delegations/{mint,attenuate,revoke}` ·
+`POST /heartbeat` · `POST /resolve` (the gate) · `GET /replay` ·
+`POST /capture/{ingest,ingest_multi}` · `POST /skills{,/run}` ·
+`POST /coaching/report` · `GET /profiles/{id}` · `GET /{health,ready,whoami}`.
+See `eidolon.api.app`.
 
 ## Status
 
 The **full PRD** (Phase 0 + Phase 1 + every v2 item) **and a research roadmap**
-beyond it are implemented and tested — **150+ tests**: Hypothesis property tests,
+beyond it are implemented and tested — **250+ tests**: Hypothesis property tests,
 live-SAGE integration, and a TLA+/TLC machine-checked model of the gate.
+
+**Shipped as a product** and deployed at
+[eidolon.onyxcreator.com](https://eidolon.onyxcreator.com): multi-user accounts,
+a per-agent delegation gallery, three connect paths (managed hosted gateway /
+agent-run setup / self-host), a live mission-control dashboard with a kill
+switch, VERSUS mode, a Postgres-backed hash-chained ledger, and one-command VPS
+deploy (`deploy/provision.sh`).
 
 **Beyond the PRD** ([`docs/review-and-related-work.md`](docs/review-and-related-work.md)):
 - **Evaluation** — AgentDojo: 96% of injection tasks contained, 0% of benign

@@ -1,11 +1,11 @@
 [project]
 name = "eidolon"
 version = "0.1.0"
-description = "Sovereign delegated agency for faithful digital twins. Built on SAGE."
+description = "The cryptographic authority layer for AI agents — seen, bounded, revocable. Built on SAGE."
 readme = "README.md"
 requires-python = ">=3.12"
 license = { text = "Apache-2.0" }
-authors = [{ name = "EIDOLON" }]
+authors = [{ name = "Gegane" }]
 
 dependencies = [
     "pydantic>=2.7",
