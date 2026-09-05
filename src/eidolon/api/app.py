@@ -517,6 +517,15 @@ def paper_page() -> str:
     return (_STATIC / "paper.html").read_text(encoding="utf-8")
 
 
+@app.get("/og.png")
+def og_image() -> Response:
+    """Arcade link-preview card (Open Graph / X)."""
+    from fastapi.responses import FileResponse
+
+    return FileResponse(_STATIC / "og.png", media_type="image/png",
+                        headers={"Cache-Control": "public, max-age=86400"})
+
+
 @app.get("/contact", response_class=HTMLResponse)
 def contact_page() -> str:
     """JOIN THE CO-OP — collaboration/contact funnel."""
