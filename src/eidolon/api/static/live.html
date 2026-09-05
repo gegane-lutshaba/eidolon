@@ -1,0 +1,230 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>EIDOLON — mission control</title>
+<style>
+  :root {
+    --bg:#0b0e14; --panel:#131824; --ink:#e6e9ef; --dim:#8a93a6; --line:#232b3a;
+    --green:#39d98a; --amber:#f2b84b; --red:#ff6b6b; --cyan:#5cc8ff; --accent:#7c7bff;
+    --darkred:#c92a2a;
+  }
+  * { box-sizing:border-box; }
+  body { margin:0; background:var(--bg); color:var(--ink);
+    font:14.5px/1.5 ui-sans-serif,system-ui,-apple-system,Segoe UI,Roboto,sans-serif; }
+  header { padding:20px 24px 14px; border-bottom:1px solid var(--line);
+    display:flex; justify-content:space-between; align-items:center; gap:14px; flex-wrap:wrap; }
+  h1 { margin:0; font-size:20px; }
+  .tag { color:var(--dim); font-size:12.5px; margin-top:3px; }
+  a { color:var(--cyan); text-decoration:none; }
+  .conn { display:flex; align-items:center; gap:7px; font-size:12.5px; color:var(--dim); }
+  .dot { width:9px; height:9px; border-radius:50%; background:var(--dim); }
+  .dot.on { background:var(--green); box-shadow:0 0 8px rgba(57,217,138,.6); }
+  main { max-width:1180px; margin:0 auto; padding:18px 24px; display:grid;
+    grid-template-columns:300px 1fr; gap:16px; }
+  @media (max-width: 900px) { main { grid-template-columns:1fr; } }
+  .panel { background:var(--panel); border:1px solid var(--line); border-radius:12px;
+    padding:13px 14px; margin-bottom:14px; }
+  .panel h2 { margin:0 0 9px; font-size:13.5px; color:var(--dim);
+    text-transform:uppercase; letter-spacing:.6px; }
+  /* agent cards */
+  .gw { border:1px solid var(--line); border-radius:10px; padding:10px 12px; margin:8px 0;
+    background:var(--bg); }
+  .gw .name { font-weight:700; display:flex; justify-content:space-between; align-items:center; }
+  .gw .meta { color:var(--dim); font-size:11.5px; margin-top:3px; }
+  .gw.dead { border-color:var(--darkred); }
+  .gw.dead .name { color:var(--red); }
+  .kill { background:#3a1720; color:var(--red); border:1px solid var(--red);
+    border-radius:7px; padding:4px 10px; font-size:11px; font-weight:800; cursor:pointer; }
+  .kill.restore { background:rgba(57,217,138,.12); color:var(--green); border-color:var(--green); }
+  /* approvals */
+  .appr { border:1px solid var(--amber); border-radius:10px; padding:10px 12px; margin:8px 0;
+    background:rgba(242,184,75,.06); }
+  .appr .what { font-weight:650; font-size:13px; }
+  .appr .meta { color:var(--dim); font-size:11.5px; margin:3px 0 7px; }
+  .appr input { width:100%; background:var(--bg); border:1px solid var(--line); color:var(--ink);
+    border-radius:7px; padding:6px 9px; font-size:11.5px; font-family:ui-monospace,Menlo,monospace;
+    margin-bottom:6px; }
+  .appr .row { display:flex; gap:6px; }
+  .appr button { flex:1; border-radius:7px; padding:6px 0; font-size:12px; font-weight:700;
+    cursor:pointer; border:1px solid var(--line); background:var(--bg); color:var(--ink); }
+  .appr .ok { border-color:var(--green); color:var(--green); }
+  .appr .no { border-color:var(--red); color:var(--red); }
+  /* feed */
+  .feedhead { display:flex; justify-content:space-between; align-items:center; margin-bottom:8px; }
+  .feedhead label { color:var(--dim); font-size:12.5px; display:flex; gap:6px; align-items:center; }
+  .ev { display:flex; gap:10px; align-items:flex-start; padding:9px 12px; margin:6px 0;
+    background:var(--panel); border:1px solid var(--line); border-radius:10px;
+    animation:pop .25s ease-out; }
+  @keyframes pop { from { transform:translateY(-4px); opacity:.4; } to { transform:none; opacity:1; } }
+  .badge { font-weight:800; font-size:10.5px; padding:3px 8px; border-radius:999px;
+    white-space:nowrap; margin-top:2px; min-width:86px; text-align:center; }
+  .b-AUTONOMOUS_ACT,.b-NOTIFY_ACT { background:rgba(57,217,138,.15); color:var(--green); }
+  .b-DRAFT { background:rgba(92,200,255,.15); color:var(--cyan); }
+  .b-ESCALATE { background:rgba(242,184,75,.15); color:var(--amber); }
+  .b-DENY { background:rgba(255,107,107,.15); color:var(--red); }
+  .b-KILLED { background:var(--darkred); color:#fff; }
+  .ev .body { flex:1; min-width:0; }
+  .ev .tool { font-weight:650; }
+  .ev .who { color:var(--accent); font-size:12px; }
+  .ev .sum { color:var(--dim); font-size:12px; overflow:hidden; text-overflow:ellipsis; }
+  .ev .why { color:var(--dim); font-size:11.5px; margin-top:2px; font-style:italic; }
+  .ev .att { color:var(--dim); font-size:10.5px; font-family:ui-monospace,Menlo,monospace; }
+  .ev .ts { color:var(--dim); font-size:10.5px; white-space:nowrap; margin-top:3px; }
+  .empty { color:var(--dim); text-align:center; padding:26px 12px; font-size:13px; }
+  .connect { background:var(--bg); border:1px dashed var(--line); border-radius:10px;
+    padding:12px 14px; margin-top:8px; }
+  .connect code { display:block; background:#0a0c11; border-radius:8px; padding:10px 12px;
+    font:11.5px ui-monospace,Menlo,monospace; color:var(--cyan); overflow-x:auto;
+    white-space:pre; margin-top:8px; }
+</style>
+</head>
+<body>
+<header>
+  <div>
+    <h1>EIDOLON <span style="color:var(--accent)">·</span> mission control</h1>
+    <div class="tag">Every agent, every action, live — bounded, revocable, attested.</div>
+  </div>
+  <div style="display:flex; gap:16px; align-items:center">
+    <span class="conn"><span class="dot" id="conn"></span><span id="connTxt">connecting…</span></span>
+    <span><a href="/console">console</a> · <a href="/audit">audit</a> · <a href="/challenge">challenge</a></span>
+  </div>
+</header>
+<main>
+  <div>
+    <div class="panel">
+      <h2>Agents</h2>
+      <div id="gateways"><div class="empty">No gateways connected yet.</div></div>
+      <div class="connect" id="connectHint">
+        <div style="font-size:12.5px; color:var(--dim)">Connect an agent — wrap any MCP tool
+          server with the gateway and it appears here live:</div>
+        <code id="connectCmd">python -m eidolon.gateway --config gateway.yaml \
+  --report-url ORIGIN \
+  --report-key &lt;gateway key&gt; --agent claude-code \
+  -- npx -y @modelcontextprotocol/server-filesystem /work</code>
+      </div>
+    </div>
+    <div class="panel" id="apprPanel" style="display:none">
+      <h2>Pending approvals</h2>
+      <div id="approvals"></div>
+    </div>
+  </div>
+
+  <div>
+    <div class="feedhead">
+      <h2 style="margin:0; font-size:13.5px; color:var(--dim); text-transform:uppercase; letter-spacing:.6px">Live action feed</h2>
+      <label><input type="checkbox" id="denials" style="width:auto" /> ⚠ denials &amp; kills only</label>
+    </div>
+    <div id="feed"><div class="empty">Waiting for events… actions stream here the moment a governed agent moves.</div></div>
+  </div>
+</main>
+<script>
+const $ = (id) => document.getElementById(id);
+const esc = (s) => String(s ?? "").replace(/[&<>]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;"}[c]));
+const MAXROWS = 200;
+let ROLE = null;
+$("connectCmd").textContent = $("connectCmd").textContent.replace("ORIGIN", window.location.origin);
+
+function evRow(e) {
+  const bad = ["DENY","KILLED"].includes(e.level) || e.level === "ESCALATE";
+  return `<div class="ev" data-level="${esc(e.level)}">
+    <span class="badge b-${esc(e.level)}">${esc(e.level)}</span>
+    <div class="body">
+      <div><span class="tool">${esc(e.tool)}</span>
+        <span class="who">· ${esc(e.agent || e.gateway_id)}</span>
+        ${e.action_class ? `<span class="sum"> · ${esc(e.action_class)}</span>` : ""}</div>
+      ${e.summary ? `<div class="sum">${esc(e.summary)}</div>` : ""}
+      ${bad && e.rationale ? `<div class="why">${esc(e.rationale)}</div>` : ""}
+      <div class="att">${e.attestation_hash ? "attested " + esc(e.attestation_hash) : ""}</div>
+    </div>
+    <span class="ts">${esc((e.ts || "").replace("T", " ").slice(5, 19))}</span>
+  </div>`;
+}
+
+const seenEmpty = () => $("feed").querySelector(".empty");
+function pushEvent(e) {
+  if (seenEmpty()) $("feed").innerHTML = "";
+  if ($("denials").checked && !["DENY","KILLED","ESCALATE"].includes(e.level)) return;
+  $("feed").insertAdjacentHTML("afterbegin", evRow(e));
+  const rows = $("feed").children;
+  while (rows.length > MAXROWS) rows[rows.length - 1].remove();
+  loadGateways(); // counts / last-seen move with the feed
+}
+
+// --- SSE ---------------------------------------------------------------
+function connect() {
+  const es = new EventSource("/live/events");
+  es.onopen = () => { $("conn").className = "dot on"; $("connTxt").textContent = "live"; };
+  es.onerror = () => { $("conn").className = "dot"; $("connTxt").textContent = "reconnecting…"; };
+  es.onmessage = (m) => { try { pushEvent(JSON.parse(m.data)); } catch {} };
+}
+
+// --- gateways ----------------------------------------------------------
+let gwTimer = null;
+async function loadGateways() {
+  clearTimeout(gwTimer); gwTimer = setTimeout(loadGateways, 15000);
+  const r = await fetch("/gateways"); if (!r.ok) return;
+  const gws = await r.json();
+  $("connectHint").style.display = gws.length ? "none" : "";
+  if (!gws.length) { $("gateways").innerHTML = `<div class="empty">No gateways connected yet.</div>`; return; }
+  $("gateways").innerHTML = gws.map(g => `
+    <div class="gw ${g.killed ? "dead" : ""}">
+      <div class="name"><span>${esc(g.agent || g.id)}</span>
+        ${ROLE === "admin" ? `<button class="kill ${g.killed ? "restore" : ""}" data-id="${esc(g.id)}"
+          data-k="${g.killed ? 0 : 1}">${g.killed ? "RESTORE" : "KILL"}</button>` : ""}</div>
+      <div class="meta">${esc(g.id)} · ${g.events} events · ${g.killed ? "⛔ KILLED" : "last seen " + esc((g.last_seen||"").replace("T"," ").slice(5,19))}</div>
+    </div>`).join("");
+  document.querySelectorAll(".kill").forEach(b => b.onclick = async () => {
+    const kill = b.dataset.k === "1";
+    if (kill && !confirm("Kill this gateway? Its agent's next action will be refused.")) return;
+    await fetch(`/gateways/${encodeURIComponent(b.dataset.id)}/${kill ? "kill" : "restore"}`, { method: "POST" });
+    loadGateways();
+  });
+}
+
+// --- approvals (admin) --------------------------------------------------
+let apTimer = null;
+async function loadApprovals() {
+  clearTimeout(apTimer); apTimer = setTimeout(loadApprovals, 15000);
+  if (ROLE !== "admin") return;
+  const r = await fetch("/escalations"); if (!r.ok) return;
+  const rows = await r.json();
+  $("apprPanel").style.display = rows.length ? "" : "none";
+  $("approvals").innerHTML = rows.map(a => `
+    <div class="appr" data-id="${esc(a.id)}">
+      <div class="what">${esc(a.action_class)}</div>
+      <div class="meta">${esc(a.message || a.rationale || "")}</div>
+      <input placeholder="principal signing key to approve" class="key" type="password" />
+      <div class="row"><button class="ok">Approve</button><button class="no">Deny</button></div>
+    </div>`).join("");
+  document.querySelectorAll(".appr").forEach(el => {
+    const id = el.dataset.id;
+    el.querySelector(".ok").onclick = async () => {
+      const key = el.querySelector(".key").value.trim(); if (!key) return;
+      await fetch(`/escalations/${encodeURIComponent(id)}/approve`, { method:"POST",
+        headers:{"content-type":"application/json"}, body: JSON.stringify({ signing_key: key }) });
+      loadApprovals();
+    };
+    el.querySelector(".no").onclick = async () => {
+      await fetch(`/escalations/${encodeURIComponent(id)}/deny`, { method:"POST" });
+      loadApprovals();
+    };
+  });
+}
+
+(async () => {
+  const who = await (await fetch("/whoami")).json().catch(() => ({}));
+  ROLE = who.role;
+  const recent = await (await fetch("/live/recent?limit=50")).json().catch(() => []);
+  if (recent.length) { $("feed").innerHTML = ""; recent.forEach(pushEvent); }
+  loadGateways(); loadApprovals(); connect();
+})();
+$("denials").addEventListener("change", async () => {
+  $("feed").innerHTML = "";
+  const recent = await (await fetch("/live/recent?limit=100")).json().catch(() => []);
+  recent.forEach(pushEvent);
+});
+</script>
+</body>
+</html>

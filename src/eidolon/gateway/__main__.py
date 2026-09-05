@@ -52,6 +52,12 @@ def main(argv: list[str] | None = None) -> int:
                     help="bind host for --http (default 127.0.0.1; 0.0.0.0 to expose)")
     ap.add_argument("--downstream-url", default=None,
                     help="downstream is a streamable-HTTP MCP server at this URL")
+    ap.add_argument("--report-url", default=None,
+                    help="EIDOLON platform base URL for mission control (live feed + kill switch)")
+    ap.add_argument("--report-key", default=None,
+                    help="gateway API key for --report-url (EIDOLON_GATEWAY_KEYS entry)")
+    ap.add_argument("--gateway-id", default=None, help="stable id for this gateway in the console")
+    ap.add_argument("--agent", default=None, help="display name of the agent (e.g. claude-code)")
     ap.add_argument("downstream", nargs=argparse.REMAINDER,
                     help="downstream MCP server command (after --)")
     args = ap.parse_args(argv)
@@ -61,6 +67,13 @@ def main(argv: list[str] | None = None) -> int:
         ap.error("provide the downstream MCP server command after `--`, or --downstream-url")
 
     config = _load_config(args.config)
+    # CLI overrides for mission-control reporting.
+    overrides = {k: v for k, v in {
+        "report_url": args.report_url, "report_key": args.report_key,
+        "gateway_id": args.gateway_id, "agent_name": args.agent,
+    }.items() if v is not None}
+    if overrides:
+        config = config.model_copy(update=overrides)
     cmd = downstream[0] if downstream else None
     rest = downstream[1:] if downstream else []
     if args.http is not None:

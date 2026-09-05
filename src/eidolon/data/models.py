@@ -10,7 +10,7 @@ from __future__ import annotations
 
 import datetime as _dt
 
-from sqlalchemy import JSON, DateTime, ForeignKey, String, Text
+from sqlalchemy import JSON, BigInteger, DateTime, ForeignKey, Integer, String, Text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from eidolon.data.db import Base
@@ -121,3 +121,35 @@ class EscalationRow(Base):
     # {"chain": [Delegation...], "certificates": [Certificate...]}.
     exec_context: Mapped[dict] = mapped_column(JSON, default=dict)
     created_at: Mapped[_dt.datetime] = mapped_column(DateTime(timezone=True), default=_utcnow)
+
+
+class GatewayRow(Base):
+    """A connected gateway (one governed agent connection) + its kill state."""
+
+    __tablename__ = "gateways"
+
+    id: Mapped[str] = mapped_column(String, primary_key=True)  # operator-chosen gateway id
+    agent: Mapped[str] = mapped_column(String, default="")  # display name, e.g. "claude-code"
+    killed: Mapped[bool] = mapped_column(default=False)
+    last_seen: Mapped[_dt.datetime] = mapped_column(DateTime(timezone=True), default=_utcnow)
+    events: Mapped[int] = mapped_column(BigInteger().with_variant(Integer, "sqlite"), default=0)
+
+
+class GatewayEventRow(Base):
+    """One governed decision reported by a gateway (mission-control feed)."""
+
+    __tablename__ = "gateway_events"
+
+    seq: Mapped[int] = mapped_column(
+        BigInteger().with_variant(Integer, "sqlite"), primary_key=True, autoincrement=True
+    )
+    gateway_id: Mapped[str] = mapped_column(String, index=True)
+    agent: Mapped[str] = mapped_column(String, default="")
+    tool: Mapped[str] = mapped_column(String)
+    action_class: Mapped[str] = mapped_column(String, default="")
+    level: Mapped[str] = mapped_column(String, index=True)
+    allowed: Mapped[bool] = mapped_column(default=False)
+    attestation_hash: Mapped[str | None] = mapped_column(String, nullable=True)
+    summary: Mapped[str] = mapped_column(Text, default="")  # redacted arg summary
+    rationale: Mapped[str] = mapped_column(Text, default="")
+    ts: Mapped[_dt.datetime] = mapped_column(DateTime(timezone=True), default=_utcnow, index=True)

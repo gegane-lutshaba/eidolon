@@ -62,6 +62,7 @@ class GovernanceEngine:
         integrity_certificate: IntegrityCertificate | None = None,
         taint: TaintTracker | None = None,
         purpose: PurposeTracker | None = None,
+        reporter: Any | None = None,  # gateway.reporter.Reporter (mission control)
     ) -> None:
         self._kairos = kairos
         self._policies = policy_map
@@ -71,6 +72,7 @@ class GovernanceEngine:
         self._icert = integrity_certificate
         self._taint = taint
         self._purpose = purpose
+        self._reporter = reporter
 
     def decide(self, tool: str, arguments: dict) -> GovernedResult:
         """Govern a tool call WITHOUT forwarding (sync). ``allowed`` means the
@@ -82,6 +84,17 @@ class GovernanceEngine:
         """
         policy = self._policies.policy_for(tool)
         summary = _summarize(arguments)
+        # Operator kill switch (mission control): a killed gateway refuses
+        # everything until the platform restores it. The attempt is still
+        # reported — the feed shows what the agent tried while dark.
+        if self._reporter is not None and self._reporter.killed:
+            refusal = GovernedResult(
+                tool=tool, action_class=policy.action_class, level="KILLED",
+                allowed=False, rationale="authority revoked by operator (kill switch)",
+                message="EIDOLON: this gateway has been killed by its operator; no tools may run.",
+            )
+            self._reporter.report_result(refusal, summary=summary)  # may un-kill
+            return refusal
         # Data-flow layer: if a sensitive value learned from a prior read is
         # flowing out through this egress call, mark it as exfiltration. The gate
         # then denies-and-attests it via the normal exclusion path — authority
@@ -111,12 +124,22 @@ class GovernanceEngine:
         )
         decision = self._kairos.resolve(action, context, self._chain, self._certs, self._icert)
         acting = decision.level in _ACTING
-        return GovernedResult(
+        result = GovernedResult(
             tool=tool, action_class=policy.action_class, level=decision.level.value,
             allowed=acting, attestation_hash=decision.attestation_hash,
             rationale=decision.rationale,
             message=None if acting else (decision.output or _refusal_message(decision.level, decision.rationale)),
         )
+        # Mission control: report the (attested) decision; if the operator has
+        # hit the kill switch, block the forward — tighten-only, and BEFORE the
+        # side effect (the attestation of the original decision stands).
+        if self._reporter is not None:
+            if self._reporter.report_result(result, summary=summary) and result.allowed:
+                return result.model_copy(update={
+                    "allowed": False,
+                    "message": "EIDOLON: gateway killed by operator before execution.",
+                })
+        return result
 
     def govern(self, tool: str, arguments: dict, forward: ForwardFn | None = None) -> GovernedResult:
         """Govern AND forward (sync). Forwards to the real tool only when the

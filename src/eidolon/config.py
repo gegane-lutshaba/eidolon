@@ -82,6 +82,22 @@ class Settings(BaseSettings):
     # a trusted reverse proxy that sets it (Caddy/nginx); off = spoofable.
     trust_proxy_headers: bool = False
 
+    # --- mission control (gateway reporting + live console) ---------------
+    # Comma-separated API keys gateways use to report events (POST
+    # /ingest/events). The admin token is also accepted. Empty = ingest closed
+    # unless the platform runs open (no auth tokens at all, localhost dev).
+    gateway_keys: str | None = None
+    # Public base URL of this deployment (deep links in notifications),
+    # e.g. https://eidolon.example.com
+    public_url: str | None = None
+
+    # --- escalation push notifications ------------------------------------
+    # Telegram: create a bot with @BotFather, put it in a chat, set both.
+    telegram_bot_token: str | None = None
+    telegram_chat_id: str | None = None
+    # Slack: an incoming-webhook URL for the channel that receives approvals.
+    slack_webhook_url: str | None = None
+
 
 @lru_cache
 def get_settings() -> Settings:

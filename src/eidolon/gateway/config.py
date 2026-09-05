@@ -58,6 +58,12 @@ class GatewayConfig(BaseModel):
     enable_purpose: bool = True
     # Optional grounding for ETHOS fidelity (in production this comes from capture).
     seed_memories: list[str] = Field(default_factory=list)
+    # Mission control: report each governed decision to an EIDOLON platform
+    # (best-effort; the platform's kill switch is honored on the next call).
+    report_url: str | None = None  # e.g. https://eidolon.example.com
+    report_key: str | None = None  # a configured EIDOLON_GATEWAY_KEYS entry
+    gateway_id: str = "gateway"
+    agent_name: str = ""  # display name in the console, e.g. "claude-code"
 
 
 def build_engine(
@@ -131,7 +137,14 @@ def build_engine(
 
         taint = TaintTracker(is_sensitive_source=_sensitive, is_egress=_egress)
     purpose = PurposeTracker() if (config.enable_purpose and "purpose-limitation" in excl) else None
+    reporter = None
+    if config.report_url:
+        from eidolon.gateway.reporter import Reporter
+
+        reporter = Reporter(config.report_url, config.report_key,
+                            gateway_id=config.gateway_id, agent=config.agent_name)
     return GovernanceEngine(
         kairos=kairos, policy_map=policy_map, chain=[root], principal_id=principal_pub,
         certificates=certs, integrity_certificate=icert, taint=taint, purpose=purpose,
+        reporter=reporter,
     )

@@ -88,14 +88,16 @@ def has_role(role: str | None, minimum: str) -> bool:
 
 
 # -- centralized path policy --------------------------------------------
-# Exact paths that need no auth at all.
-_PUBLIC = {"/health", "/ready", "/login", "/logout", "/whoami", "/favicon.ico"}
+# Exact paths that need no auth at all. /ingest/events authenticates itself
+# (gateway API key — a machine credential, not an operator role).
+_PUBLIC = {"/health", "/ready", "/login", "/logout", "/whoami", "/favicon.ico",
+           "/ingest/events"}
 
 # GET paths available to the read-only auditor role (and thus admin too):
-# the forensic surface + the showcase. The control plane (delegations, the
-# approval inbox, skills) is admin-only.
-_AUDITOR_GET_EXACT = {"/", "/showcase", "/replay"}
-_AUDITOR_GET_PREFIX = ("/audit", "/profiles", "/challenge")
+# the forensic surface, the showcase, and mission control (viewing). The
+# control plane (delegations, approvals, skills, kill switch) is admin-only.
+_AUDITOR_GET_EXACT = {"/", "/showcase", "/replay", "/gateways"}
+_AUDITOR_GET_PREFIX = ("/audit", "/profiles", "/challenge", "/live")
 
 
 def required_role(method: str, path: str) -> str | None:
@@ -117,6 +119,20 @@ def required_role(method: str, path: str) -> str | None:
         if path in _AUDITOR_GET_EXACT or path.startswith(_AUDITOR_GET_PREFIX):
             return "auditor"
     return "admin"
+
+
+def is_valid_gateway_key(candidate: str | None, settings: Settings | None = None) -> bool:
+    """Machine credential for event ingest: a configured gateway key, or the
+    admin token. In fully-open dev mode (no tokens at all) ingest is open too."""
+    settings = settings or get_settings()
+    if not auth_enabled(settings) and not settings.gateway_keys:
+        return True  # localhost dev, everything open
+    if candidate is None:
+        return False
+    keys = [k.strip() for k in (settings.gateway_keys or "").split(",") if k.strip()]
+    if settings.admin_token:
+        keys.append(settings.admin_token)
+    return any(secrets.compare_digest(candidate, k) for k in keys)
 
 
 def client_ip(request: Request, settings: Settings | None = None) -> str:

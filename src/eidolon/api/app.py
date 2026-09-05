@@ -32,12 +32,14 @@ from fastapi.responses import (
 )
 
 from eidolon.api import audit as audit_svc
+from eidolon.api import live as live_svc
 from eidolon.api.auth import (
     SESSION_COOKIE,
     auth_enabled,
     client_ip,
     current_role,
     has_role,
+    is_valid_gateway_key,
     required_role,
     role_for_token,
 )
@@ -362,6 +364,10 @@ def resolve(
             "certificates": [c.model_dump(mode="json") for c in certificates],
         })
         out["escalation_id"] = req.id
+        # Ping the operator where they are (Telegram/Slack), fire-and-forget.
+        from eidolon.api.notify import notify_escalation
+
+        notify_escalation(req.id, req.action_class, req.message)
     return out
 
 
@@ -409,6 +415,94 @@ def replay(principal_id: str, action_class: str | None = None, limit: int = 1000
         ReplayFilter(principal_id=principal_id, action_class=action_class, limit=limit)
     )
     return [r.model_dump(mode="json") for r in records]
+
+
+# -- mission control: gateway ingest + live feed --------------------------
+_live_hub = live_svc.LiveHub()
+_live_sf = None  # cached sessionmaker for the operational store
+
+
+def _live_store():
+    global _live_sf
+    if _live_sf is None:
+        from eidolon.data.db import get_sessionmaker, init_db
+
+        init_db()
+        _live_sf = get_sessionmaker()
+    return _live_sf
+
+
+@app.post("/ingest/events")
+def ingest_event(request: Request, event: live_svc.GatewayEvent = Body(...)) -> dict:
+    """Gateway reporting (machine credential). Responds with the kill state —
+    a killed gateway must refuse its next actions."""
+    header = request.headers.get("authorization", "")
+    key = header[7:].strip() if header[:7].lower() == "bearer " else None
+    if not is_valid_gateway_key(key):
+        raise HTTPException(status_code=401, detail="valid gateway key required",
+                            headers={"WWW-Authenticate": "Bearer"})
+    killed = live_svc.record_event(_live_store(), event)
+    _live_hub.publish(event.model_dump(mode="json"))
+    return {"ok": True, "killed": killed}
+
+
+@app.get("/live/events")
+async def live_events(request: Request):
+    """SSE stream for the mission-control feed (recent backlog, then live)."""
+    from fastapi.responses import StreamingResponse
+
+    async def stream():
+        sid, queue, backlog = _live_hub.subscribe()
+        try:
+            for ev in backlog:
+                yield live_svc.sse_format(ev)
+            while True:
+                try:
+                    import asyncio
+
+                    ev = await asyncio.wait_for(queue.get(), timeout=15.0)
+                    yield live_svc.sse_format(ev)
+                except TimeoutError:
+                    yield ": keepalive\n\n"
+                if await request.is_disconnected():
+                    return
+        finally:
+            _live_hub.unsubscribe(sid)
+
+    return StreamingResponse(stream(), media_type="text/event-stream",
+                             headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"})
+
+
+@app.get("/live/recent")
+def live_recent(limit: int = 50) -> list[dict]:
+    """The stored feed (for page load before the SSE stream attaches)."""
+    return live_svc.recent_events(_live_store(), limit=limit)
+
+
+@app.get("/gateways")
+def gateways() -> list[dict]:
+    return live_svc.list_gateways(_live_store())
+
+
+@app.post("/gateways/{gateway_id}/kill")
+def kill_gateway(gateway_id: str) -> dict:
+    """The red button: the gateway refuses its next actions (on its next report)."""
+    if not live_svc.set_killed(_live_store(), gateway_id, True):
+        raise HTTPException(status_code=404, detail="unknown gateway")
+    return {"gateway_id": gateway_id, "killed": True}
+
+
+@app.post("/gateways/{gateway_id}/restore")
+def restore_gateway(gateway_id: str) -> dict:
+    if not live_svc.set_killed(_live_store(), gateway_id, False):
+        raise HTTPException(status_code=404, detail="unknown gateway")
+    return {"gateway_id": gateway_id, "killed": False}
+
+
+@app.get("/live", response_class=HTMLResponse)
+def live_page() -> str:
+    """Mission control: live feed, agent cards, approvals, kill switch."""
+    return (_STATIC / "live.html").read_text(encoding="utf-8")
 
 
 # -- audit console (gated to auditor+ by the auth middleware) -------------
