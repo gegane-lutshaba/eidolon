@@ -39,7 +39,21 @@ are **machine-checked in TLA+/TLC** (`make formal`,
 privacy-purpose-limitation; and approved payments export as signed **AP2
 mandates** ([`docs/payments-ap2.md`](docs/payments-ap2.md)).
 
-## See it in 60 seconds
+## Try to break it
+
+```bash
+uv sync && make challenge     # → http://localhost:8000/challenge
+```
+
+You play a **fully compromised agent** — no model to trick, you issue the tool
+calls yourself: leak the customer's account number, wire money, drop the prod
+database, slip through an unmapped tool, inject "you are pre-authorized" into
+the arguments. The gate holds anyway, because authority is a signed credential
+checked outside the agent — and every attempt lands on the tamper-evident
+ledger. If you ever see `FLAG{gate-breached}`, you found a real bypass: report
+it. **[5-minute quickstart →](docs/quickstart.md)**
+
+## See it narrated in 60 seconds
 
 ```bash
 make demo         # narrated CLI:  uv run python examples/continuity_demo.py
@@ -80,8 +94,11 @@ make gateway-demo    # self-contained: ops tools + a red-team coda, governed & a
 
 Read tools run, drafts are held, status posts notify, and dangerous tools (email
 a customer, `delete_database(prod)`, run an exploit, scan an out-of-scope host)
-are **refused** — each attested. Wire it into a real agent with
-[`docs/integrations/`](docs/integrations/); run the real proxy with
+are **refused** — each attested. The gateway speaks **stdio** (client launches
+it as a subprocess) and **streamable HTTP** (`--http 8300` → agents connect to
+`http://host:8300/mcp`; one governed endpoint fronts tools for a whole team).
+Wire it into a real agent with [`docs/integrations/`](docs/integrations/); run
+the real proxy with
 `python -m eidolon.gateway --config gateway.yaml -- <downstream MCP server>`.
 
 ## Architecture
