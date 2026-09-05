@@ -184,3 +184,28 @@ def test_app_pages_gated_and_public_pages_open(client) -> None:
     assert r.status_code == 303 and r.headers["location"] == "/signup"
     _signup(client)
     assert client.get("/app").status_code == 200
+
+
+def test_contact_lead_capture_and_admin_inbox(client) -> None:
+    # public submit
+    r = client.post("/contact", json={"handle": "@dev", "email": "dev@x.co",
+                                      "interest": "collaborate", "message": "let's build"})
+    assert r.status_code == 200 and r.json()["ok"]
+    # validation: needs a way to reach + a message
+    assert client.post("/contact", json={"message": ""}).status_code == 400
+    # admin inbox
+    leads = client.get("/api/leads", headers={"Authorization": "Bearer admin-t"}).json()
+    assert any(x["email"] == "dev@x.co" for x in leads)
+    # non-admin cannot read leads
+    client.post("/auth/signup", json={"email": "u@x.co", "password": "strongpass123"})
+    assert client.get("/api/leads").status_code == 403
+
+
+def test_expanded_gallery_kinds(client) -> None:
+    client.post("/auth/signup", json={"email": "fin@x.co", "password": "strongpass123"})
+    g = client.get("/api/gallery").json()
+    assert {"coding", "research", "comms", "devops", "data", "support", "finance"} <= set(g)
+    # a finance agent's yaml holds payment tools (commit-action), never auto-acts them
+    a = client.post("/api/agents", json={"name": "ap-bot", "preset": "finance/reader"}).json()
+    conn = client.get(f"/api/agents/{a['id']}/connect").json()
+    assert "wire_funds" in conn["gateway_yaml"] and "read_ledger" in conn["gateway_yaml"]

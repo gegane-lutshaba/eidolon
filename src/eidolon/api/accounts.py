@@ -72,6 +72,24 @@ GALLERY: dict[str, dict] = {
         "desc": "Acts on routine ops; anything destructive or production-facing escalates.",
         "authority": "operative",
     },
+    "data": {
+        "label": "Data / analytics agent",
+        "examples": "SQL · notebooks · dashboards",
+        "desc": "Queries and analyzes freely; schema changes and deletes are held for you.",
+        "authority": "builder",
+    },
+    "support": {
+        "label": "Support agent",
+        "examples": "tickets · replies · CRM",
+        "desc": "Reads tickets and drafts replies; sending to customers always needs you.",
+        "authority": "builder",
+    },
+    "finance": {
+        "label": "Finance / payments agent",
+        "examples": "invoices · reconciliation · AP",
+        "desc": "Reads ledgers and drafts; every payment escalates — signed AP2 mandate required.",
+        "authority": "reader",
+    },
 }
 
 
@@ -326,6 +344,18 @@ def _policy_pack(kind: str, scope: dict) -> list[dict]:
     if kind == "devops":
         return _pack(scope, reads=["get_deploy_status", "get_logs", "get_metrics", *_FS_READ_TOOLS],
                      holds=["deploy", "rollback", "run_shell", "delete_database", *_FS_WRITE_TOOLS])
+    if kind == "data":
+        return _pack(scope, reads=["query", "run_sql", "list_tables", "describe", *_FS_READ_TOOLS],
+                     holds=["execute_sql", "drop_table", "delete_rows", *_FS_WRITE_TOOLS],
+                     sensitive=["query", "run_sql"])
+    if kind == "support":
+        return _pack(scope, reads=["read_ticket", "search_tickets", "read_crm", *_FS_READ_TOOLS],
+                     holds=_FS_WRITE_TOOLS, sends=["reply_ticket", "send_email"],
+                     sensitive=["read_ticket", "read_crm"])
+    if kind == "finance":
+        return _pack(scope, reads=["read_ledger", "read_invoice", "list_transactions", *_FS_READ_TOOLS],
+                     holds=["wire_funds", "pay_invoice", "issue_refund", "create_payment", *_FS_WRITE_TOOLS],
+                     sensitive=["read_ledger", "read_invoice"])
     # coding (default)
     return _pack(scope, reads=_FS_READ_TOOLS, holds=_FS_WRITE_TOOLS)
 

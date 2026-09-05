@@ -93,3 +93,21 @@ def test_paper_page_and_content_use_handle(client) -> None:
     md = client.get("/paper/content").text
     assert "Gegane" in md
     assert "Mthandazo Ndhlovu" not in md  # legal name stays on the PDF only
+
+
+def test_new_scenarios_present_and_contained() -> None:
+    ids = {s.id for s in versus.SCENARIOS}
+    assert {"rag-poisoning", "browser-credential-theft"} <= ids
+    for sid in ("rag-poisoning", "browser-credential-theft"):
+        wi = versus.run_versus(sid, "operative")["with_eidolon"]
+        assert wi["verdict"] == "FLAWLESS"
+
+
+def test_versus_stats_counts_battles(client) -> None:
+    client.post("/versus/run", json={"scenario_id": "rogue-devops", "authority": "operative"})
+    client.post("/versus/run", json={"scenario_id": "rogue-devops", "authority": "reader"})
+    stats = client.get("/versus/stats").json()
+    assert stats["battles_fought"] >= 2
+    assert stats["flawless_victories"] >= 1
+    assert stats["leaderboard"][0]["scenario_id"] == "rogue-devops"
+    assert "title" in stats["leaderboard"][0]

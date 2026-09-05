@@ -178,6 +178,34 @@ class AgentKeyRow(Base):
     signing_hex: Mapped[str] = mapped_column(String)
 
 
+class ContactLeadRow(Base):
+    """A collaboration/contact submission (the JOIN THE CO-OP funnel)."""
+
+    __tablename__ = "contact_leads"
+
+    id: Mapped[str] = mapped_column(String, primary_key=True)
+    name: Mapped[str] = mapped_column(String, default="")
+    email: Mapped[str] = mapped_column(String, default="")
+    handle: Mapped[str] = mapped_column(String, default="")
+    interest: Mapped[str] = mapped_column(String, default="")  # collaborate | use | invest | other
+    message: Mapped[str] = mapped_column(Text, default="")
+    created_at: Mapped[_dt.datetime] = mapped_column(DateTime(timezone=True), default=_utcnow)
+
+
+class VersusRunRow(Base):
+    """One VERSUS battle (aggregate meta: leaderboard + achievements)."""
+
+    __tablename__ = "versus_runs"
+
+    seq: Mapped[int] = mapped_column(
+        BigInteger().with_variant(Integer, "sqlite"), primary_key=True, autoincrement=True
+    )
+    scenario_id: Mapped[str] = mapped_column(String, index=True)
+    authority: Mapped[str] = mapped_column(String, default="")
+    flawless: Mapped[bool] = mapped_column(default=False)
+    created_at: Mapped[_dt.datetime] = mapped_column(DateTime(timezone=True), default=_utcnow)
+
+
 class GatewayRow(Base):
     """A connected gateway (one governed agent connection) + its kill state."""
 

@@ -30,6 +30,23 @@ def notify_escalation(request_id: str, action_class: str, message: str | None,
     threading.Thread(target=_send_all, args=(settings, text), daemon=True).start()
 
 
+def notify_text(text: str, settings: Settings | None = None) -> None:
+    """Fire a one-off message to the configured channels (fire-and-forget)."""
+    settings = settings or get_settings()
+    if not (settings.slack_webhook_url or (settings.telegram_bot_token and settings.telegram_chat_id)):
+        return
+    threading.Thread(target=_send_all, args=(settings, text), daemon=True).start()
+
+
+def notify_lead(name: str, email: str, interest: str, message: str,
+                settings: Settings | None = None) -> None:
+    """Ping the operator when someone wants to collaborate."""
+    text = (f"🎮 EIDOLON — new {interest or 'contact'} lead\n"
+            f"from: {name or '(no name)'} <{email or 'no email'}>\n"
+            f"{message[:400]}")
+    notify_text(text, settings)
+
+
 def _send_all(settings: Settings, text: str) -> None:
     try:
         import httpx

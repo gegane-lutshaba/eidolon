@@ -522,6 +522,49 @@ def paper_page() -> str:
     return (_STATIC / "paper.html").read_text(encoding="utf-8")
 
 
+@app.get("/contact", response_class=HTMLResponse)
+def contact_page() -> str:
+    """JOIN THE CO-OP — collaboration/contact funnel."""
+    return (_STATIC / "contact.html").read_text(encoding="utf-8")
+
+
+@app.post("/contact")
+def contact_submit(
+    request: Request,
+    name: str = Body(default=""),
+    email: str = Body(default=""),
+    handle: str = Body(default=""),
+    interest: str = Body(default="collaborate"),
+    message: str = Body(default=""),
+) -> dict:
+    from eidolon.api import community
+    from eidolon.api.notify import notify_lead
+
+    ip = client_ip(request)
+    now = time.monotonic()
+    hits = [t for t in _login_hits.get(ip, []) if now - t < 300.0]
+    if len(hits) >= 8:
+        raise HTTPException(status_code=429, detail="too many submissions; try again shortly")
+    hits.append(now)
+    _login_hits[ip] = hits
+    try:
+        lead = community.save_lead(_live_store(), name, email, handle, interest, message)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    notify_lead(name, email or handle, interest, message)
+    return {"ok": True, **lead}
+
+
+@app.get("/api/leads")
+def api_leads(request: Request) -> list[dict]:
+    """Operator-only: the collaboration inbox."""
+    if not has_role(current_role(request), "admin"):
+        raise HTTPException(status_code=403, detail="admin only")
+    from eidolon.api import community
+
+    return community.list_leads(_live_store())
+
+
 @app.get("/paper/content", response_class=PlainTextResponse)
 def paper_content() -> Response:
     """The white paper markdown, byline rewritten to the handle for the web."""
@@ -533,11 +576,15 @@ def paper_content() -> Response:
     md = next((p.read_text(encoding="utf-8") for p in candidates if p.exists()), None)
     if md is None:
         return PlainTextResponse("# White paper\n\nContent unavailable.", status_code=200)
-    # Web byline uses the handle, not the legal name (that stays on the PDF).
-    md = md.replace("**Mthandazo Ndhlovu**", "**Gegane**")
+    # Web byline uses the handle, not the legal name (that stays on the PDF),
+    # and routes collaboration through /contact instead of exposing an email.
+    md = md.replace("**Mthandazo Ndhlovu** — mthandazogegane@gmail.com",
+                    "**Gegane** — [join the co-op →](/contact)")
     md = md.replace("Mthandazo Ndhlovu — mthandazogegane@gmail.com",
-                    "Gegane — @gegane")
+                    "Gegane — [join the co-op →](/contact)")
+    md = md.replace("**Mthandazo Ndhlovu**", "**Gegane**")
     md = md.replace("Mthandazo Ndhlovu", "Gegane")
+    md = md.replace("mthandazogegane@gmail.com", "[contact](/contact)")
     return PlainTextResponse(md, media_type="text/markdown")
 
 
@@ -673,9 +720,29 @@ def versus_run(request: Request, scenario_id: str = Body(...),
     if runtime().settings.public_challenge and not _get_arena().allow_call(client_ip(request)):
         raise HTTPException(status_code=429, detail="rate limit: slow down and try again shortly")
     try:
-        return run_versus(scenario_id, authority)
+        result = run_versus(scenario_id, authority)
     except KeyError as exc:
         raise HTTPException(status_code=404, detail="no such scenario") from exc
+    from eidolon.api import community
+
+    try:  # meta is best-effort; never fail a battle over the leaderboard
+        community.record_versus(_live_store(), scenario_id, authority,
+                                result["with_eidolon"]["verdict"] == "FLAWLESS")
+    except Exception:  # noqa: BLE001
+        pass
+    return result
+
+
+@app.get("/versus/stats")
+def versus_stats() -> dict:
+    from eidolon.api import community
+    from eidolon.showcase.versus import list_scenarios
+
+    stats = community.versus_stats(_live_store())
+    titles = {s["id"]: s["title"] for s in list_scenarios()}
+    for row in stats["leaderboard"]:
+        row["title"] = titles.get(row["scenario_id"], row["scenario_id"])
+    return stats
 
 
 @app.post("/challenge/reset")
