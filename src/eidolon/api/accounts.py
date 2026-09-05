@@ -197,6 +197,27 @@ def role_in_org(sf, org_id: str, user_id: str) -> str | None:
     return m.role if m else None
 
 
+def get_org(sf, org_id: str) -> dict | None:
+    from eidolon.data.models import OrgRow
+
+    with sf() as s:
+        o = s.get(OrgRow, org_id)
+    return {"id": o.id, "name": o.name, "personal": o.personal,
+            "retention_days": o.retention_days} if o else None
+
+
+def set_retention(sf, org_id: str, days: int) -> int:
+    from eidolon.data.models import OrgRow
+
+    days = max(1, min(int(days), 3650))
+    with sf() as s:
+        o = s.get(OrgRow, org_id)
+        if o:
+            o.retention_days = days
+            s.commit()
+    return days
+
+
 def create_org(sf, user_id: str, name: str) -> dict:
     with sf() as s:
         org = _create_org(s, name)

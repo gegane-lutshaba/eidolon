@@ -153,6 +153,7 @@ class OrgRow(Base):
     id: Mapped[str] = mapped_column(String, primary_key=True)  # "org-<rand>"
     name: Mapped[str] = mapped_column(String, default="")
     personal: Mapped[bool] = mapped_column(default=False)  # the owner's auto-created team
+    retention_days: Mapped[int | None] = mapped_column(Integer, nullable=True)  # declared policy
     created_at: Mapped[_dt.datetime] = mapped_column(DateTime(timezone=True), default=_utcnow)
 
 

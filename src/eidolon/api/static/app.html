@@ -122,11 +122,40 @@
     <select id="orgSel" title="team"
       style="background:var(--bg);border:1px solid var(--line);color:var(--ink);border-radius:7px;padding:6px 9px;font-family:inherit;font-size:12px"></select>
     <button class="btn" id="teamBtn" style="font-size:8px">👥 TEAM</button>
+    <button class="btn" id="compBtn" style="font-size:8px">📋 COMPLIANCE</button>
     <span class="conn"><span class="dot" id="sse"></span><span id="sseTxt">connecting…</span></span>
     <span class="who" id="who"></span>
     <a href="#" id="logout" style="font-size:12px">log out</a>
   </span>
 </header>
+
+<!-- compliance modal -->
+<div class="overlay" id="comp">
+  <div class="modal">
+    <button class="btn mclose" onclick="document.getElementById('comp').classList.remove('open')">✕</button>
+    <h3>📋 COMPLIANCE PACK</h3>
+    <div style="color:var(--dim); font-size:12.5px; margin-bottom:12px">A hash-sealed evidence
+      bundle for your team — governed-action summary, ledger integrity, and a SOC2 / EU-AI-Act
+      control mapping.</div>
+    <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap; margin-bottom:12px">
+      <label style="margin:0">Period</label>
+      <select id="compDays" style="background:var(--bg);border:1px solid var(--line);color:var(--ink);border-radius:7px;padding:8px;font-family:inherit;font-size:12px">
+        <option value="7">last 7 days</option>
+        <option value="30" selected>last 30 days</option>
+        <option value="90">last 90 days</option>
+        <option value="365">last year</option>
+      </select>
+      <button class="btn" id="compRun">RUN</button>
+      <a class="btn" id="compDl" download>⬇ DOWNLOAD EVIDENCE</a>
+    </div>
+    <div id="compOut" style="font-size:12.5px"></div>
+    <div id="compRetention" style="margin-top:14px; display:none">
+      <label>Retention policy (days)</label>
+      <div style="display:flex; gap:8px"><input id="retDays" type="number" min="1" />
+        <button class="newbtn" id="retBtn" style="width:auto">SAVE</button></div>
+    </div>
+  </div>
+</div>
 
 <!-- team modal -->
 <div class="overlay" id="team">
@@ -480,6 +509,46 @@ $("joinBtn").onclick = async () => {
     body: JSON.stringify({ code }) });
   if (r.ok) location.reload(); else toast("invalid invite");
 };
+
+// --- compliance ---------------------------------------------------------
+function chainLine(c) {
+  if (!c) return "";
+  if (!c.supported) return `ledger: ${esc(c.backend||"?")} (no hash chain)`;
+  return c.ok ? `<span style="color:var(--green)">● ledger intact — ${c.length} entries, chain unbroken</span>`
+              : `<span style="color:var(--red)">⚠ ledger TAMPERED at #${c.broken_at}</span>`;
+}
+async function runCompliance() {
+  const days = $("compDays").value;
+  $("compDl").href = `/api/compliance/report.json?days=${days}`;
+  const r = await fetch(`/api/compliance/summary?days=${days}`);
+  if (!r.ok) { $("compOut").textContent = "unavailable"; return; }
+  const d = await r.json();
+  const s = d.summary, out = s.by_outcome || {};
+  const chip = (label, n, col) => `<span style="display:inline-block;background:var(--panel);border:1px solid var(--line);border-radius:7px;padding:8px 11px;margin:4px 6px 0 0"><b style="color:${col}">${n||0}</b> ${label}</span>`;
+  $("compOut").innerHTML = `
+    <div style="margin-bottom:8px">${chainLine(d.ledger_integrity)}</div>
+    <div>${chip("actions governed", s.actions_governed, "var(--green)")}
+      ${chip("blocked", s.blocked, "var(--red)")}
+      ${chip("escalated", out.ESCALATE, "var(--amber)")}
+      ${chip("killed", out.KILLED, "var(--red)")}</div>
+    <div style="color:var(--dim); margin-top:10px">period ${esc(d.period.from.slice(0,10))} → ${esc(d.period.to.slice(0,10))}
+      · retention ${d.retention_days}d · ${(d.controls||[]).length} mapped controls (SOC2 / EU AI Act)
+      · sealed <code style="color:var(--cyan)">${esc((d.bundle_hash||"").slice(0,16))}…</code></div>
+    <div style="color:var(--dim); margin-top:6px">${(s.agents||[]).length} agent(s) in scope.</div>`;
+}
+$("compBtn").onclick = async () => {
+  const admin = ME.role === "admin" || ME.role === "owner";
+  $("compRetention").style.display = admin ? "block" : "none";
+  $("comp").classList.add("open");
+  runCompliance();
+};
+$("compRun").onclick = runCompliance;
+$("retBtn") && ($("retBtn").onclick = async () => {
+  const days = parseInt($("retDays").value, 10); if (!days) return;
+  const r = await fetch("/api/orgs/retention", { method:"POST", headers:{"content-type":"application/json"},
+    body: JSON.stringify({ days }) });
+  if (r.ok) { toast("retention updated"); runCompliance(); }
+});
 
 (async () => {
   // honor an ?invite=code deep link (redeem, then clean the URL)

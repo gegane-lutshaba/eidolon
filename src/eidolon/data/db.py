@@ -44,6 +44,7 @@ def init_db(url: str | None = None) -> None:
 # online on both SQLite and Postgres. Keyed by table -> {column: DDL type}.
 _ADDED_COLUMNS: dict[str, dict[str, str]] = {
     "agents": {"org_id": "VARCHAR"},
+    "orgs": {"retention_days": "INTEGER"},
 }
 
 

@@ -365,6 +365,47 @@ def api_org_join(request: Request, code: str = Body(..., embed=True)) -> Respons
     return resp
 
 
+@app.post("/api/orgs/retention")
+def api_set_retention(request: Request, days: int = Body(..., embed=True)) -> dict:
+    _user, org_id = _req_org(request, "admin")
+    return {"retention_days": accounts_svc.set_retention(_live_store(), org_id, days)}
+
+
+# -- compliance & audit packs ---------------------------------------------
+def _build_compliance(request: Request, days: int) -> dict:
+    import datetime as _dt
+
+    from eidolon.api import compliance
+
+    _user, org_id = _req_org(request, "auditor")
+    sf = _live_store()
+    org = accounts_svc.get_org(sf, org_id) or {"id": org_id, "name": "team"}
+    days = max(1, min(int(days), 3650))
+    until = _dt.datetime.now(_dt.UTC)
+    since = until - _dt.timedelta(days=days)
+    return compliance.build_report(
+        sf, org=org, agent_ids=accounts_svc.owned_gateway_ids(sf, org_id),
+        since=since, until=until, chain=audit_svc.chain_status(runtime().sage),
+        generated_at=until)
+
+
+@app.get("/api/compliance/summary")
+def api_compliance_summary(request: Request, days: int = 30) -> dict:
+    report = _build_compliance(request, days)
+    return {k: v for k, v in report.items() if k != "attestations"}  # lighter
+
+
+@app.get("/api/compliance/report.json")
+def api_compliance_report(request: Request, days: int = 30) -> Response:
+    from eidolon.common.canonical import canonical_json
+
+    report = _build_compliance(request, days)
+    org = report["org"]["id"]
+    return Response(
+        content=canonical_json(report), media_type="application/json",
+        headers={"Content-Disposition": f'attachment; filename="eidolon-compliance-{org}.json"'})
+
+
 @app.get("/api/presets")
 def api_presets() -> dict:
     return {k: {kk: vv for kk, vv in v.items()} for k, v in accounts_svc.PRESETS.items()}
