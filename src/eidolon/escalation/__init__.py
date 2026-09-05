@@ -12,7 +12,7 @@ grants authority the credential lacks (out-of-scope, revoked, unpermitted class
 still DENY), and it is bound to one specific action digest.
 """
 
-from eidolon.escalation.queue import EscalationQueue
+from eidolon.escalation.queue import EscalationQueue, PostgresEscalationQueue
 from eidolon.escalation.types import (
     Approval,
     EscalationRequest,
@@ -23,6 +23,7 @@ from eidolon.escalation.types import (
 
 __all__ = [
     "EscalationQueue",
+    "PostgresEscalationQueue",
     "EscalationRequest",
     "Approval",
     "action_digest",

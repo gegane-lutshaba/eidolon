@@ -45,7 +45,14 @@ def build_runtime(
     sage = sage or get_sage()
     profile = ProfileLoader().load(profile_id)
 
-    themis = Themis(heartbeat_ttl_seconds=settings.heartbeat_ttl_seconds)
+    # On the postgres backend, revocations + heartbeats persist in the
+    # operational store: a restart never resurrects revoked authority.
+    if settings.sage_backend == "postgres":
+        from eidolon.themis.revocation_store import PostgresRevocationStore
+
+        themis = Themis(store=PostgresRevocationStore(settings.heartbeat_ttl_seconds))
+    else:
+        themis = Themis(heartbeat_ttl_seconds=settings.heartbeat_ttl_seconds)
     style = ClaudeStyleEngine(settings) if settings.style_enabled else None
     ethos = Ethos(sage, style=style, profile=profile)
     basanos = Basanos()

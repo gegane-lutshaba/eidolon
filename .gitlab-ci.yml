@@ -34,7 +34,8 @@ default:
     paths: [.uv-cache]
   before_script:
     - export UV_CACHE_DIR="$CI_PROJECT_DIR/.uv-cache"
-    - uv sync --group dev
+    # mcp: exercises the gateway transports; biscuit: standards-interop tests.
+    - uv sync --group dev --extra mcp --extra biscuit
 
 variables:
   UV_CACHE_DIR: "$CI_PROJECT_DIR/.uv-cache"

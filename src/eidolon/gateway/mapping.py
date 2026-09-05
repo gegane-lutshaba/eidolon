@@ -41,6 +41,11 @@ class ToolPolicy(BaseModel):
     # (privacy purpose-limitation). Data collected for one purpose may not flow
     # into a tool serving an incompatible purpose.
     purpose: str | None = None
+    # Data-flow declarations for the taint layer. ``sensitive``: this tool's
+    # results carry private values worth tracking. ``egress``: this tool can
+    # carry data out. None = fall back to the tracker's name heuristics.
+    sensitive: bool | None = None
+    egress: bool | None = None
 
     def resolved_scope(self, arguments: dict) -> Scope:
         selectors = {k: list(v) for k, v in self.scope.selectors.items()}
@@ -81,6 +86,15 @@ class ToolPolicyMap:
     @property
     def default_class(self) -> str:
         return self._default_class
+
+    # -- data-flow declarations (None = caller falls back to heuristics) --
+    def declared_sensitive(self, tool: str) -> bool | None:
+        p = self._by_tool.get(tool)
+        return p.sensitive if p else None
+
+    def declared_egress(self, tool: str) -> bool | None:
+        p = self._by_tool.get(tool)
+        return p.egress if p else None
 
 
 def _most_dangerous_class(profile: DomainProfile) -> str:

@@ -95,7 +95,7 @@ _PUBLIC = {"/health", "/ready", "/login", "/logout", "/whoami", "/favicon.ico"}
 # the forensic surface + the showcase. The control plane (delegations, the
 # approval inbox, skills) is admin-only.
 _AUDITOR_GET_EXACT = {"/", "/showcase", "/replay"}
-_AUDITOR_GET_PREFIX = ("/audit", "/profiles")
+_AUDITOR_GET_PREFIX = ("/audit", "/profiles", "/challenge")
 
 
 def required_role(method: str, path: str) -> str | None:
@@ -109,4 +109,7 @@ def required_role(method: str, path: str) -> str | None:
     if method in ("GET", "HEAD"):
         if path in _AUDITOR_GET_EXACT or path.startswith(_AUDITOR_GET_PREFIX):
             return "auditor"
+    if path.startswith("/challenge"):
+        # Driving the break-the-gate demo is not a control-plane mutation.
+        return "auditor"
     return "admin"
