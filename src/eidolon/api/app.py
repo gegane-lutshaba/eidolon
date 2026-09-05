@@ -35,6 +35,7 @@ from eidolon.api import audit as audit_svc
 from eidolon.api.auth import (
     SESSION_COOKIE,
     auth_enabled,
+    client_ip,
     current_role,
     has_role,
     required_role,
@@ -152,7 +153,7 @@ def login_page() -> str:
 
 @app.post("/login")
 def login(request: Request, token: str = Body(..., embed=True)) -> Response:
-    ip = request.client.host if request.client else "?"
+    ip = client_ip(request)  # proxy-aware behind Caddy (EIDOLON_TRUST_PROXY_HEADERS)
     now = time.monotonic()
     hits = [t for t in _login_hits.get(ip, []) if now - t < 300.0]
     if len(hits) >= 10:
@@ -222,7 +223,12 @@ def demo_offensive() -> dict:
 
 
 # -- break-the-gate challenge (the hands-on wow) --------------------------
+# Gated mode (default): one shared instance attesting to the REAL ledger.
+# Public mode (EIDOLON_PUBLIC_CHALLENGE): per-visitor isolated sessions in a
+# ChallengeArena (own in-memory ledger, idle TTL, LRU cap, per-IP rate limit).
 _challenge = None
+_arena = None
+CHALLENGE_COOKIE = "eidolon_challenge"
 
 
 def _get_challenge():
@@ -234,27 +240,63 @@ def _get_challenge():
     return _challenge
 
 
+def _get_arena():
+    global _arena
+    if _arena is None:
+        from eidolon.showcase.challenge import ChallengeArena
+
+        _arena = ChallengeArena()
+    return _arena
+
+
+def _challenge_for(request: Request, response: Response):
+    """Resolve the caller's challenge instance (public: isolated per visitor)."""
+    if not runtime().settings.public_challenge:
+        return _get_challenge()
+    sid, ch = _get_arena().session(request.cookies.get(CHALLENGE_COOKIE))
+    response.set_cookie(
+        CHALLENGE_COOKIE, sid,
+        httponly=True, samesite="lax",
+        secure=runtime().settings.session_cookie_secure,
+        max_age=3600, path="/challenge",
+    )
+    return ch
+
+
 @app.get("/challenge", response_class=HTMLResponse)
 def challenge_page() -> str:
     return (_STATIC / "challenge.html").read_text(encoding="utf-8")
 
 
 @app.get("/challenge/state")
-def challenge_state() -> dict:
-    return _get_challenge().state()
+def challenge_state(request: Request, response: Response) -> dict:
+    out = _challenge_for(request, response).state()
+    out["public"] = runtime().settings.public_challenge
+    return out
 
 
 @app.post("/challenge/call")
-def challenge_call(tool: str = Body(...), arguments: dict = Body(default_factory=dict)) -> dict:
-    return _get_challenge().call(tool, arguments).model_dump()
+def challenge_call(
+    request: Request,
+    response: Response,
+    tool: str = Body(...),
+    arguments: dict = Body(default_factory=dict),
+) -> dict:
+    if runtime().settings.public_challenge and not _get_arena().allow_call(client_ip(request)):
+        raise HTTPException(status_code=429, detail="rate limit: slow down and try again shortly")
+    return _challenge_for(request, response).call(tool, arguments).model_dump()
 
 
 @app.post("/challenge/reset")
-def challenge_reset() -> dict:
-    # Fresh engine + principal. The old attempts stay on the ledger — it is
+def challenge_reset(request: Request) -> dict:
+    # Public mode: drop only the caller's isolated session. Gated mode: fresh
+    # shared engine + principal — old attempts stay on the ledger, which is
     # append-only; you cannot wipe the record (that's the point).
     global _challenge
-    _challenge = None
+    if runtime().settings.public_challenge:
+        _get_arena().reset(request.cookies.get(CHALLENGE_COOKIE))
+    else:
+        _challenge = None
     return {"ok": True}
 
 

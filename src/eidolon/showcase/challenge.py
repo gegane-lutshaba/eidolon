@@ -18,6 +18,10 @@ captured. It can't be, through the gate.
 
 from __future__ import annotations
 
+import secrets
+import time
+from collections import OrderedDict
+from collections.abc import Callable
 from typing import Any
 
 from pydantic import BaseModel, Field
@@ -179,3 +183,80 @@ class Challenge:
             "secret_hint": SECRET_IBAN,
             "tools": TOOLS,
         }
+
+
+class ChallengeArena:
+    """Per-visitor challenge sessions for the PUBLIC instance.
+
+    Isolation and abuse control for an internet-facing demo:
+
+    - each visitor (anonymous cookie id) gets their own :class:`Challenge` over
+      their own **in-memory** SAGE port — attempts never touch the real
+      production ledger and vanish with the session;
+    - sessions auto-reset: idle TTL + LRU eviction under a hard session cap;
+    - per-IP sliding-window rate limit on tool calls.
+
+    A monotonic clock is injected so tests can drive expiry deterministically.
+    """
+
+    def __init__(
+        self,
+        *,
+        max_sessions: int = 300,
+        ttl_seconds: float = 1800.0,
+        rate_limit: int = 40,
+        rate_window: float = 60.0,
+        clock: Callable[[], float] = time.monotonic,
+    ) -> None:
+        self._sessions: OrderedDict[str, tuple[Challenge, float]] = OrderedDict()
+        self._max = max_sessions
+        self._ttl = ttl_seconds
+        self._rate_limit = rate_limit
+        self._rate_window = rate_window
+        self._clock = clock
+        self._hits: dict[str, list[float]] = {}
+
+    def session(self, sid: str | None) -> tuple[str, Challenge]:
+        """Return (session_id, challenge), creating an isolated one if needed."""
+        from eidolon.sage import InMemorySagePort
+
+        now = self._clock()
+        self._evict(now)
+        if sid and sid in self._sessions:
+            ch, _ = self._sessions[sid]
+            self._sessions[sid] = (ch, now)
+            self._sessions.move_to_end(sid)
+            return sid, ch
+        sid = secrets.token_urlsafe(16)
+        ch = Challenge(InMemorySagePort())  # isolated: never the real ledger
+        self._sessions[sid] = (ch, now)
+        return sid, ch
+
+    def reset(self, sid: str | None) -> None:
+        """Drop one visitor's session (their next call starts fresh)."""
+        if sid:
+            self._sessions.pop(sid, None)
+
+    def allow_call(self, ip: str) -> bool:
+        """Sliding-window per-IP rate limit for /challenge/call."""
+        now = self._clock()
+        hits = [t for t in self._hits.get(ip, []) if now - t < self._rate_window]
+        if len(hits) >= self._rate_limit:
+            self._hits[ip] = hits
+            return False
+        hits.append(now)
+        self._hits[ip] = hits
+        return True
+
+    def _evict(self, now: float) -> None:
+        # idle TTL …
+        stale = [sid for sid, (_, seen) in self._sessions.items() if now - seen > self._ttl]
+        for sid in stale:
+            del self._sessions[sid]
+        # … then LRU down to the cap (OrderedDict: oldest first).
+        while len(self._sessions) >= self._max:
+            self._sessions.popitem(last=False)
+
+    @property
+    def session_count(self) -> int:
+        return len(self._sessions)

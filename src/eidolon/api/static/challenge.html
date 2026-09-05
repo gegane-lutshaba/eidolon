@@ -108,6 +108,7 @@
         <button class="fire" id="fire">Call tool</button>
       </div>
       <div class="hint" id="secretHint"></div>
+      <div class="hint" id="notice" style="color:var(--amber)"></div>
     </div>
     <div class="log" id="log"><div class="empty">No attempts yet. Recon first: read the customer record.</div></div>
   </div>
@@ -154,6 +155,8 @@ async function refresh() {
   const s = await r.json();
   SECRET = s.secret_hint;
   $("secretHint").textContent = `The secret you're trying to leak (learned from the record): ${SECRET}`;
+  if (s.public) $("notice").textContent =
+    "Public demo: your session is isolated and rate-limited, and resets after ~30 min idle.";
   $("objs").innerHTML = s.objectives.map(o =>
     `<div class="obj"><span>${esc(o.title)}</span>
      <span class="st ${o.blocked ? "blocked" : "open"}">${o.blocked ? "BLOCKED" : "OPEN"}</span></div>`).join("");
@@ -171,9 +174,13 @@ async function refresh() {
 }
 
 async function call(tool, args) {
-  await fetch("/challenge/call", { method: "POST",
+  const r = await fetch("/challenge/call", { method: "POST",
     headers: {"content-type": "application/json"},
     body: JSON.stringify({ tool, arguments: args }) });
+  if (r.status === 429) {
+    $("notice").textContent = "⏳ Rate limit — the gate is patient; you should be too. Try again in a minute.";
+    return;
+  }
   await refresh();
 }
 

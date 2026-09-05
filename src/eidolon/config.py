@@ -73,6 +73,15 @@ class Settings(BaseSettings):
     # Optional comma-separated Host allow-list (adds TrustedHostMiddleware).
     trusted_hosts: str | None = None
 
+    # --- public break-the-gate challenge ---------------------------------
+    # When true, /challenge* needs NO login: each visitor gets an isolated
+    # session (own engine + own in-memory ledger — never the real one),
+    # rate-limited per IP and auto-reset on idle. Everything else stays gated.
+    public_challenge: bool = False
+    # Honor X-Forwarded-For for client IPs (rate limiting). Enable ONLY behind
+    # a trusted reverse proxy that sets it (Caddy/nginx); off = spoofable.
+    trust_proxy_headers: bool = False
+
 
 @lru_cache
 def get_settings() -> Settings:

@@ -106,10 +106,27 @@ def required_role(method: str, path: str) -> str | None:
     """
     if path in _PUBLIC:
         return None
+    if path.startswith("/challenge"):
+        # Driving the break-the-gate demo is not a control-plane mutation.
+        # With EIDOLON_PUBLIC_CHALLENGE the demo is open to the internet —
+        # visitors get isolated, rate-limited sessions (see ChallengeArena).
+        if get_settings().public_challenge:
+            return None
+        return "auditor"
     if method in ("GET", "HEAD"):
         if path in _AUDITOR_GET_EXACT or path.startswith(_AUDITOR_GET_PREFIX):
             return "auditor"
-    if path.startswith("/challenge"):
-        # Driving the break-the-gate demo is not a control-plane mutation.
-        return "auditor"
     return "admin"
+
+
+def client_ip(request: Request, settings: Settings | None = None) -> str:
+    """The caller's IP for rate limiting. Behind a trusted reverse proxy
+    (EIDOLON_TRUST_PROXY_HEADERS) use the first X-Forwarded-For hop — otherwise
+    every visitor would share the proxy container's IP. Off by default: the
+    header is spoofable when the app is directly exposed."""
+    settings = settings or get_settings()
+    if settings.trust_proxy_headers:
+        xff = request.headers.get("x-forwarded-for", "")
+        if xff:
+            return xff.split(",")[0].strip()
+    return request.client.host if request.client else "?"
