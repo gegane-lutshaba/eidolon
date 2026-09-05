@@ -74,7 +74,7 @@
     </div>
     <button class="go" type="submit" id="go">▶ INSERT COIN</button>
     <div class="err" id="err"></div>
-    <div class="foot"><a href="/">← back to title screen</a></div>
+    <div class="foot"><a href="#" id="forgot">forgot password?</a> · <a href="/">← title</a></div>
   </form>
 <script>
 const $ = (id) => document.getElementById(id);
@@ -88,6 +88,20 @@ function setMode(m) {
 }
 $("mNew").onclick = () => setMode("signup");
 $("mCont").onclick = () => setMode("login");
+
+$("forgot").addEventListener("click", async (e) => {
+  e.preventDefault();
+  const email = $("email").value.trim();
+  if (!email) { $("err").textContent = "enter your email above first"; return; }
+  const r = await fetch("/auth/forgot", { method:"POST", headers:{"content-type":"application/json"},
+    body: JSON.stringify({ email }) });
+  const d = await r.json().catch(() => ({}));
+  $("err").style.color = "var(--green)";
+  $("err").textContent = d.emailed
+    ? "If that account exists, a reset link is on its way."
+    : (d.email_enabled ? "If that account exists, a reset link was sent."
+                       : "Reset requested — ask your operator for the link (email isn't set up).");
+});
 
 $("f").addEventListener("submit", async (e) => {
   e.preventDefault();

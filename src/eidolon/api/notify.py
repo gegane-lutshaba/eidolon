@@ -38,6 +38,37 @@ def notify_text(text: str, settings: Settings | None = None) -> None:
     threading.Thread(target=_send_all, args=(settings, text), daemon=True).start()
 
 
+def email_configured(settings: Settings | None = None) -> bool:
+    settings = settings or get_settings()
+    return bool(settings.smtp_host and settings.smtp_from or settings.smtp_user)
+
+
+def send_email(to: str, subject: str, body: str, settings: Settings | None = None) -> bool:
+    """Send a plain-text email if SMTP is configured. Returns True on send."""
+    settings = settings or get_settings()
+    if not settings.smtp_host:
+        return False
+    try:
+        import smtplib
+        from email.message import EmailMessage
+
+        msg = EmailMessage()
+        msg["From"] = settings.smtp_from or settings.smtp_user or "eidolon@localhost"
+        msg["To"] = to
+        msg["Subject"] = subject
+        msg.set_content(body)
+        with smtplib.SMTP(settings.smtp_host, settings.smtp_port, timeout=10) as smtp:
+            if settings.smtp_tls:
+                smtp.starttls()
+            if settings.smtp_user:
+                smtp.login(settings.smtp_user, settings.smtp_password or "")
+            smtp.send_message(msg)
+        return True
+    except Exception as exc:  # noqa: BLE001 — email failure must not break the flow
+        _log.warning("email send failed: %s", exc)
+        return False
+
+
 def notify_lead(name: str, email: str, interest: str, message: str,
                 settings: Settings | None = None) -> None:
     """Ping the operator when someone wants to collaborate."""

@@ -96,6 +96,14 @@ class Settings(BaseSettings):
     # e.g. https://eidolon.example.com
     public_url: str | None = None
 
+    # --- outbound email (optional; powers forgot-password links) ----------
+    smtp_host: str | None = None
+    smtp_port: int = 587
+    smtp_user: str | None = None
+    smtp_password: str | None = None
+    smtp_from: str | None = None  # defaults to smtp_user
+    smtp_tls: bool = True
+
     # --- escalation push notifications ------------------------------------
     # Telegram: create a bot with @BotFather, put it in a chat, set both.
     telegram_bot_token: str | None = None

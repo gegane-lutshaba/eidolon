@@ -315,6 +315,57 @@ def close_session(sf, token: str | None) -> None:
             s.commit()
 
 
+RESET_TTL = _dt.timedelta(hours=1)
+
+
+def change_password(sf, user_id: str, current: str, new: str) -> None:
+    from eidolon.data.models import UserRow
+
+    if len(new) < 8:
+        raise ValueError("new password must be at least 8 characters")
+    with sf() as s:
+        u = s.get(UserRow, user_id)
+        if u is None or not verify_password(current, u.password_hash):
+            raise ValueError("current password is incorrect")
+        u.password_hash = hash_password(new)
+        s.commit()
+
+
+def create_reset_token(sf, email: str) -> tuple[str, str] | None:
+    """Return (token, user_id) for a real account, else None (callers must not
+    leak which emails exist)."""
+    from eidolon.data.models import PasswordResetRow, UserRow
+
+    with sf() as s:
+        u = s.query(UserRow).filter(UserRow.email == email.strip().lower()).first()
+        if u is None:
+            return None
+        token = f"rst_{secrets.token_urlsafe(24)}"
+        s.add(PasswordResetRow(token=token, user_id=u.id, expires_at=_now() + RESET_TTL))
+        s.commit()
+        return token, u.id
+
+
+def reset_password(sf, token: str, new: str) -> bool:
+    from eidolon.data.models import PasswordResetRow, UserRow, UserSessionRow
+
+    if len(new) < 8:
+        raise ValueError("new password must be at least 8 characters")
+    with sf() as s:
+        row = s.get(PasswordResetRow, (token or "").strip())
+        if row is None or _as_utc(row.expires_at) < _now():
+            return False
+        u = s.get(UserRow, row.user_id)
+        if u is None:
+            return False
+        u.password_hash = hash_password(new)
+        s.delete(row)  # one-shot
+        # invalidate any live sessions for this user (force re-login)
+        s.query(UserSessionRow).filter(UserSessionRow.user_id == u.id).delete()
+        s.commit()
+        return True
+
+
 def user_for_session(sf, token: str | None) -> dict | None:
     from eidolon.data.models import UserRow, UserSessionRow
 

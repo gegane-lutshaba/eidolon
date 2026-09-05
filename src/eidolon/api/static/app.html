@@ -124,7 +124,7 @@
     <button class="btn" id="teamBtn" style="font-size:8px">👥 TEAM</button>
     <button class="btn" id="compBtn" style="font-size:8px">📋 COMPLIANCE</button>
     <span class="conn"><span class="dot" id="sse"></span><span id="sseTxt">connecting…</span></span>
-    <span class="who" id="who"></span>
+    <span class="who" id="who" style="cursor:pointer" title="account"></span>
     <a href="#" id="logout" style="font-size:12px">log out</a>
   </span>
 </header>
@@ -264,6 +264,21 @@
       <div class="snip"><pre id="cMcp"></pre><button class="btn copy" data-t="cMcp">COPY</button></div>
       <div style="color:var(--dim); font-size:12px; margin-top:12px" id="cHttp"></div>
     </div>
+  </div>
+</div>
+
+<!-- account modal -->
+<div class="overlay" id="acct">
+  <div class="modal" style="max-width:420px">
+    <button class="btn mclose" onclick="document.getElementById('acct').classList.remove('open')">✕</button>
+    <h3>🔑 ACCOUNT</h3>
+    <div style="color:var(--dim); font-size:12.5px" id="acctEmail"></div>
+    <label>Current password</label>
+    <input id="curPw" type="password" autocomplete="current-password" />
+    <label>New password</label>
+    <input id="newPw" type="password" autocomplete="new-password" minlength="8" />
+    <button class="newbtn" id="pwBtn" style="margin-top:16px">CHANGE PASSWORD</button>
+    <div class="empty" id="pwMsg" style="display:none"></div>
   </div>
 </div>
 
@@ -543,6 +558,24 @@ $("compBtn").onclick = async () => {
   runCompliance();
 };
 $("compRun").onclick = runCompliance;
+
+// --- account / change password ------------------------------------------
+$("who").onclick = () => {
+  if (!ME.email) return;
+  $("acctEmail").textContent = ME.email;
+  $("pwMsg").style.display = "none"; $("curPw").value = ""; $("newPw").value = "";
+  $("acct").classList.add("open");
+};
+$("pwBtn").onclick = async () => {
+  const r = await fetch("/auth/change-password", { method:"POST",
+    headers:{"content-type":"application/json"},
+    body: JSON.stringify({ current_password: $("curPw").value, new_password: $("newPw").value }) });
+  const d = await r.json().catch(() => ({}));
+  const m = $("pwMsg"); m.style.display = "block";
+  if (r.ok) { m.style.color = "var(--green)"; m.textContent = "✓ password changed";
+    setTimeout(() => $("acct").classList.remove("open"), 900); }
+  else { m.style.color = "var(--red)"; m.textContent = d.detail || "failed"; }
+};
 $("retBtn") && ($("retBtn").onclick = async () => {
   const days = parseInt($("retDays").value, 10); if (!days) return;
   const r = await fetch("/api/orgs/retention", { method:"POST", headers:{"content-type":"application/json"},

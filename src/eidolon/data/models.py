@@ -198,6 +198,16 @@ class AgentRow(Base):
     created_at: Mapped[_dt.datetime] = mapped_column(DateTime(timezone=True), default=_utcnow)
 
 
+class PasswordResetRow(Base):
+    """A one-shot password-reset token (expiring)."""
+
+    __tablename__ = "password_resets"
+
+    token: Mapped[str] = mapped_column(String, primary_key=True)
+    user_id: Mapped[str] = mapped_column(String, index=True)
+    expires_at: Mapped[_dt.datetime] = mapped_column(DateTime(timezone=True))
+
+
 class AgentKeyRow(Base):
     """An agent's principal keypair, minted at enrollment (custodial v1).
 

@@ -202,6 +202,75 @@ def logout() -> Response:
     return resp
 
 
+# -- password self-service ------------------------------------------------
+def _reset_link(token: str) -> str:
+    base = (runtime().settings.public_url or "").rstrip("/")
+    return f"{base}/reset?token={token}" if base else f"/reset?token={token}"
+
+
+@app.post("/auth/change-password")
+def auth_change_password(request: Request, current_password: str = Body(...),
+                         new_password: str = Body(...)) -> dict:
+    user = _req_user(request)
+    try:
+        accounts_svc.change_password(_live_store(), user["id"], current_password, new_password)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    return {"ok": True}
+
+
+@app.post("/auth/forgot")
+def auth_forgot(request: Request, email: str = Body(..., embed=True)) -> dict:
+    from eidolon.api.notify import email_configured, send_email
+
+    ip = client_ip(request)
+    now = time.monotonic()
+    hits = [t for t in _login_hits.get(ip, []) if now - t < 300.0]
+    if len(hits) >= 8:
+        raise HTTPException(status_code=429, detail="too many requests; try again shortly")
+    hits.append(now)
+    _login_hits[ip] = hits
+
+    made = accounts_svc.create_reset_token(_live_store(), email)
+    emailed = False
+    if made and email_configured():
+        token, _uid = made
+        emailed = send_email(
+            email.strip(), "Reset your EIDOLON password",
+            f"Reset your password (valid 1 hour):\n\n{_reset_link(token)}\n\n"
+            f"If you didn't request this, ignore this email.")
+    # Never reveal whether the address exists.
+    return {"ok": True, "emailed": emailed,
+            "email_enabled": email_configured()}
+
+
+@app.get("/reset", response_class=HTMLResponse)
+def reset_page() -> str:
+    return (_STATIC / "reset.html").read_text(encoding="utf-8")
+
+
+@app.post("/auth/reset")
+def auth_reset(token: str = Body(...), new_password: str = Body(...)) -> dict:
+    try:
+        ok = accounts_svc.reset_password(_live_store(), token, new_password)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    if not ok:
+        raise HTTPException(status_code=400, detail="invalid or expired reset link")
+    return {"ok": True}
+
+
+@app.post("/api/admin/reset-link")
+def api_admin_reset_link(request: Request, email: str = Body(..., embed=True)) -> dict:
+    """Operator-only: mint a reset link for a user (hand-off when email is off)."""
+    if not has_role(current_role(request), "admin"):
+        raise HTTPException(status_code=403, detail="admin only")
+    made = accounts_svc.create_reset_token(_live_store(), email)
+    if made is None:
+        raise HTTPException(status_code=404, detail="no such user")
+    return {"email": email.strip().lower(), "reset_link": _reset_link(made[0])}
+
+
 @app.get("/whoami")
 def whoami(request: Request) -> dict:
     user = current_user(request)
