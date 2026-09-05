@@ -95,7 +95,9 @@ def has_role(role: str | None, minimum: str) -> bool:
 _PUBLIC = {"/health", "/ready", "/login", "/logout", "/whoami", "/favicon.ico",
            "/ingest/events", "/", "/signup", "/auth/signup", "/auth/login",
            "/auth/logout", "/stats/public", "/portal", "/paper", "/paper/content",
-           "/contact", "/versus/stats", "/showcase", "/console", "/og.png"}
+           "/contact", "/versus/stats", "/showcase", "/console",
+    "/og.png", "/favicon.svg", "/apple-touch-icon.png", "/icon-512.png",
+    "/site.webmanifest"}
 
 # Paths that require a signed-in USER (or the operator admin): the product app.
 _USER_PREFIX = ("/app", "/api/")

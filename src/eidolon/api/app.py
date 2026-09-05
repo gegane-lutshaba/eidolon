@@ -526,6 +526,48 @@ def og_image() -> Response:
                         headers={"Cache-Control": "public, max-age=86400"})
 
 
+# -- brand icons ----------------------------------------------------------
+def _icon(name: str, media: str) -> Response:
+    from fastapi.responses import FileResponse
+
+    return FileResponse(_STATIC / name, media_type=media,
+                        headers={"Cache-Control": "public, max-age=604800"})
+
+
+@app.get("/favicon.svg")
+def favicon_svg() -> Response:
+    return _icon("favicon.svg", "image/svg+xml")
+
+
+@app.get("/favicon.ico")
+def favicon_ico() -> Response:
+    return _icon("favicon-32.png", "image/png")
+
+
+@app.get("/apple-touch-icon.png")
+def apple_touch() -> Response:
+    return _icon("apple-touch-icon.png", "image/png")
+
+
+@app.get("/icon-512.png")
+def icon_512() -> Response:
+    return _icon("icon-512.png", "image/png")
+
+
+@app.get("/site.webmanifest")
+def webmanifest() -> dict:
+    return {
+        "name": "EIDOLON", "short_name": "EIDOLON",
+        "description": "The cryptographic authority layer for AI agents.",
+        "start_url": "/", "display": "standalone",
+        "background_color": "#07090f", "theme_color": "#8b7bff",
+        "icons": [
+            {"src": "/favicon.svg", "type": "image/svg+xml", "sizes": "any"},
+            {"src": "/icon-512.png", "type": "image/png", "sizes": "512x512"},
+        ],
+    }
+
+
 @app.get("/contact", response_class=HTMLResponse)
 def contact_page() -> str:
     """JOIN THE CO-OP — collaboration/contact funnel."""

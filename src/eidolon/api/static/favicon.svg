@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" width="32" height="32" role="img" aria-label="EIDOLON">
+  <rect x="0.5" y="0.5" width="31" height="31" rx="7" fill="#07090f" stroke="#8b7bff" stroke-width="1.5"/>
+  <!-- pixel "E": purple bars, middle bar green (the gate holds) -->
+  <rect x="9" y="7"  width="4"  height="18" fill="#8b7bff"/>
+  <rect x="9" y="7"  width="14" height="4"  fill="#8b7bff"/>
+  <rect x="9" y="14" width="11" height="4"  fill="#39d98a"/>
+  <rect x="9" y="21" width="14" height="4"  fill="#8b7bff"/>
+</svg>
