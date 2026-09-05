@@ -37,24 +37,25 @@ def client():
 
 
 # --- pages served + gated ----------------------------------------------
-def test_console_pages_served_open(client, tokens) -> None:
+def test_delegations_page_served_open(client, tokens) -> None:
     tokens(None, None)  # dev-open
-    for path, needle in [
-        ("/console", "control plane"),
-        ("/console/delegations", "Mint delegation"),
-        ("/console/approvals", "approvals inbox"),
-    ]:
-        r = client.get(path)
-        assert r.status_code == 200 and needle in r.text
+    r = client.get("/console/delegations")
+    assert r.status_code == 200 and "Mint delegation" in r.text
 
 
-def test_console_is_admin_only(client, tokens) -> None:
+def test_retired_console_routes_redirect(client, tokens) -> None:
+    tokens(None, None)
+    # the old console hub now points at mission control
+    r = client.get("/console", follow_redirects=False)
+    assert r.status_code == 307 and r.headers["location"] == "/live"
+
+
+def test_delegations_is_admin_only(client, tokens) -> None:
     tokens("admin-t", "audit-t")
-    # auditor may not reach the control plane (403, not a login redirect)
-    r = client.get("/console", headers={"Authorization": "Bearer audit-t"})
-    assert r.status_code == 403
-    # admin may
-    assert client.get("/console", headers={"Authorization": "Bearer admin-t"}).status_code == 200
+    r = client.get("/console/delegations", headers={"Authorization": "Bearer audit-t"})
+    assert r.status_code == 403  # auditor may not reach the control plane
+    assert client.get("/console/delegations",
+                      headers={"Authorization": "Bearer admin-t"}).status_code == 200
 
 
 # --- approval inbox -----------------------------------------------------

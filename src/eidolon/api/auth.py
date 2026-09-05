@@ -95,7 +95,7 @@ def has_role(role: str | None, minimum: str) -> bool:
 _PUBLIC = {"/health", "/ready", "/login", "/logout", "/whoami", "/favicon.ico",
            "/ingest/events", "/", "/signup", "/auth/signup", "/auth/login",
            "/auth/logout", "/stats/public", "/portal", "/paper", "/paper/content",
-           "/contact", "/versus/stats"}
+           "/contact", "/versus/stats", "/showcase", "/console"}
 
 # Paths that require a signed-in USER (or the operator admin): the product app.
 _USER_PREFIX = ("/app", "/api/")
@@ -103,7 +103,7 @@ _USER_PREFIX = ("/app", "/api/")
 # GET paths available to the read-only auditor role (and thus admin too):
 # the forensic surface, the showcase, and mission control (viewing). The
 # control plane (delegations, approvals, skills, kill switch) is admin-only.
-_AUDITOR_GET_EXACT = {"/showcase", "/replay", "/gateways"}
+_AUDITOR_GET_EXACT = {"/replay", "/gateways"}
 _AUDITOR_GET_PREFIX = ("/audit", "/profiles", "/challenge", "/live")
 
 

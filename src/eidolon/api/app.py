@@ -50,13 +50,10 @@ from eidolon.capture import ConsentGrant, connect, ingest, ingest_all, known_sou
 from eidolon.coaching import Aspiration, Coach
 from eidolon.common import crypto
 from eidolon.common.errors import AttenuationError, EidolonError
-from eidolon.config import Settings
 from eidolon.escalation import EscalationQueue
-from eidolon.ethos.style import ClaudeStyleEngine
 from eidolon.profile import ProfileLoader
 from eidolon.runtime import Runtime, build_runtime
 from eidolon.sage.port import ReplayFilter
-from eidolon.showcase import continuity_scenario, offensive_scenario
 from eidolon.skills import Skill, SkillExecutor, SkillLibrary
 from eidolon.themis.types import Delegation, MintParams
 from eidolon.types import Action, Context
@@ -482,20 +479,18 @@ async def api_feed(request: Request):
                              headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"})
 
 
-# -- operator control-plane console (admin) -------------------------------
-@app.get("/console", response_class=HTMLResponse)
-def console_home() -> str:
-    return (_STATIC / "console.html").read_text(encoding="utf-8")
-
-
+# -- operator control-plane (admin) ---------------------------------------
+# Delegations is the one raw mint/attenuate/revoke tool, reached from /live.
+# (The former /console hub and /console/approvals were retired — approvals
+# live inline in /live; agents live in /app.)
 @app.get("/console/delegations", response_class=HTMLResponse)
 def console_delegations() -> str:
     return (_STATIC / "console_delegations.html").read_text(encoding="utf-8")
 
 
-@app.get("/console/approvals", response_class=HTMLResponse)
-def console_approvals() -> str:
-    return (_STATIC / "console_approvals.html").read_text(encoding="utf-8")
+@app.get("/console")
+def console_redirect() -> Response:
+    return RedirectResponse("/live", status_code=307)
 
 
 # -- public landing + product app pages -----------------------------------
@@ -615,24 +610,13 @@ def public_stats() -> dict:
         return {"actions_governed": 0, "attacks_blocked": 0, "agents_enrolled": 0}
 
 
-# -- showcase dashboard ---------------------------------------------------
-@app.get("/showcase", response_class=HTMLResponse)
-def dashboard() -> str:
-    """The showcase dashboard — runs live scenarios against the real core."""
-    return (_STATIC / "dashboard.html").read_text(encoding="utf-8")
-
-
-@app.post("/demo/continuity")
-def demo_continuity(voice: bool = False) -> dict:
-    # voice=1 renders drafts/escalations with Claude (needs an API key); the
-    # decision path never depends on it.
-    style = ClaudeStyleEngine(Settings()) if voice else None
-    return continuity_scenario(style=style).model_dump(mode="json")
-
-
-@app.post("/demo/offensive")
-def demo_offensive() -> dict:
-    return offensive_scenario().model_dump(mode="json")
+# -- showcase (retired) ---------------------------------------------------
+# The narrated demo dashboard was superseded by VERSUS mode. Old links land
+# there. (The continuity/offensive scenarios still ship as the CLI `make demo`
+# and in the showcase module + tests.)
+@app.get("/showcase")
+def showcase_redirect() -> Response:
+    return RedirectResponse("/versus", status_code=307)
 
 
 # -- break-the-gate challenge (the hands-on wow) --------------------------
