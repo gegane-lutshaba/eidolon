@@ -61,7 +61,7 @@ app = FastAPI(title="EIDOLON", version="0.1.0")
 _STATIC = pathlib.Path(__file__).parent / "static"
 
 _runtime: Runtime | None = None
-_escalations = EscalationQueue()
+_escalations: EscalationQueue | None = None
 _login_hits: dict[str, list[float]] = {}  # ip -> recent login attempt times
 
 
@@ -70,6 +70,19 @@ def runtime() -> Runtime:
     if _runtime is None:
         _runtime = build_runtime()
     return _runtime
+
+
+def escalations() -> EscalationQueue:
+    """The approval inbox — durable on the postgres backend."""
+    global _escalations
+    if _escalations is None:
+        if runtime().settings.sage_backend == "postgres":
+            from eidolon.escalation import PostgresEscalationQueue
+
+            _escalations = PostgresEscalationQueue()
+        else:
+            _escalations = EscalationQueue()
+    return _escalations
 
 
 @app.middleware("http")
@@ -299,39 +312,38 @@ def resolve(
     except EidolonError as exc:
         raise HTTPException(status_code=409, detail=str(exc)) from exc
     out = decision.model_dump()
-    # An escalated/drafted decision becomes a pending item in the approval inbox.
+    # An escalated/drafted decision becomes a pending item in the approval
+    # inbox, carrying the chain + certificates so an approval can re-execute.
     if decision.level.value in ("ESCALATE", "DRAFT"):
-        req = _escalations.enqueue(decision, action, context)
-        _esc_context[req.id] = (chain, certificates)
+        req = escalations().enqueue(decision, action, context, exec_context={
+            "chain": [d.model_dump(mode="json") for d in chain],
+            "certificates": [c.model_dump(mode="json") for c in certificates],
+        })
         out["escalation_id"] = req.id
     return out
-
-
-# request_id -> (chain, certificates) so an approval can re-execute the action.
-_esc_context: dict[str, tuple] = {}
 
 
 @app.get("/escalations")
 def list_escalations(principal_id: str | None = None) -> list[dict]:
     """Pending approvals. Omit principal_id for the full operator inbox."""
-    items = (
-        _escalations.list_pending(principal_id)
-        if principal_id
-        else _escalations.list_all_pending()
-    )
+    q = escalations()
+    items = q.list_pending(principal_id) if principal_id else q.list_all_pending()
     return [r.model_dump(mode="json") for r in items]
 
 
 @app.post("/escalations/{request_id}/approve")
 def approve_escalation(request_id: str, signing_key: str = Body(..., embed=True)) -> dict:
-    req = _escalations.get(request_id)
+    q = escalations()
+    req = q.get(request_id)
     if req is None:
         raise HTTPException(status_code=404, detail="no such escalation")
     try:
-        approval = _escalations.approve(request_id, signing_key)
+        approval = q.approve(request_id, signing_key)
     except (ValueError, KeyError) as exc:
         raise HTTPException(status_code=409, detail=str(exc)) from exc
-    chain, certs = _esc_context.get(request_id, ([], []))
+    ec = q.exec_context_for(request_id)
+    chain = [Delegation.model_validate(d) for d in ec.get("chain", [])]
+    certs = [Certificate.model_validate(c) for c in ec.get("certificates", [])]
     decision = runtime().kairos.resolve_with_approval(req.action, _ctx(req), chain, approval, certs)
     return {"approved": request_id, "decision": decision.model_dump()}
 
@@ -339,7 +351,7 @@ def approve_escalation(request_id: str, signing_key: str = Body(..., embed=True)
 @app.post("/escalations/{request_id}/deny")
 def deny_escalation(request_id: str) -> dict:
     try:
-        _escalations.deny(request_id)
+        escalations().deny(request_id)
     except (ValueError, KeyError) as exc:
         raise HTTPException(status_code=409, detail=str(exc)) from exc
     return {"denied": request_id}

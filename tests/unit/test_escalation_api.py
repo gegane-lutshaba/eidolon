@@ -15,7 +15,7 @@ def client(monkeypatch):
     import eidolon.api.app as app_module
 
     app_module._runtime = None
-    app_module._esc_context.clear()
+    app_module._escalations = None  # fresh queue per test
     return TestClient(app_module.app)
 
 

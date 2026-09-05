@@ -87,3 +87,37 @@ class ContinuityGrantRow(Base):
     # Revocable by the principal or an authorized independent revoker.
     revoker_ids: Mapped[list] = mapped_column(JSON, default=list)
     revoked: Mapped[bool] = mapped_column(default=False)
+
+
+# -- platform runtime state (survives restarts on the postgres backend) ---
+class RevocationRow(Base):
+    """An explicitly revoked delegation id. Presence = revoked (irreversible)."""
+
+    __tablename__ = "revocations"
+
+    delegation_id: Mapped[str] = mapped_column(String, primary_key=True)
+    revoked_at: Mapped[_dt.datetime] = mapped_column(DateTime(timezone=True), default=_utcnow)
+
+
+class HeartbeatRow(Base):
+    """Last dead-man's-switch heartbeat per principal."""
+
+    __tablename__ = "heartbeats"
+
+    principal_id: Mapped[str] = mapped_column(String, primary_key=True)
+    last_beat: Mapped[_dt.datetime] = mapped_column(DateTime(timezone=True), default=_utcnow)
+
+
+class EscalationRow(Base):
+    """A pending/settled approval-inbox item (serialized EscalationRequest)."""
+
+    __tablename__ = "escalations"
+
+    id: Mapped[str] = mapped_column(String, primary_key=True)
+    principal_id: Mapped[str] = mapped_column(String, index=True)
+    status: Mapped[str] = mapped_column(String, index=True, default="pending")
+    payload: Mapped[dict] = mapped_column(JSON)  # EscalationRequest (mode="json")
+    # Execution context so an approval can re-execute the exact action:
+    # {"chain": [Delegation...], "certificates": [Certificate...]}.
+    exec_context: Mapped[dict] = mapped_column(JSON, default=dict)
+    created_at: Mapped[_dt.datetime] = mapped_column(DateTime(timezone=True), default=_utcnow)
