@@ -44,6 +44,45 @@ PRESETS: dict[str, dict] = {
     },
 }
 
+# The delegation gallery: recommended authority per agent TYPE, with a tuned
+# day-one tool-policy pack. Stored in the agent's preset column as
+# "<kind>/<authority>" (older rows hold a bare authority; kind falls back).
+GALLERY: dict[str, dict] = {
+    "coding": {
+        "label": "Coding agent",
+        "examples": "Claude Code · Cursor · pi · codex",
+        "desc": "Reads and searches your workspace freely; edits and commits are held for you.",
+        "authority": "builder",
+    },
+    "research": {
+        "label": "Research agent",
+        "examples": "browsing · summarizing · digging",
+        "desc": "Fetches and reads broadly — but what it learns can't leak out through egress.",
+        "authority": "reader",
+    },
+    "comms": {
+        "label": "Comms assistant",
+        "examples": "email · chat · scheduling",
+        "desc": "Drafts in your voice, posts routine status; external sends always need you.",
+        "authority": "builder",
+    },
+    "devops": {
+        "label": "DevOps agent",
+        "examples": "deploys · monitoring · ops",
+        "desc": "Acts on routine ops; anything destructive or production-facing escalates.",
+        "authority": "operative",
+    },
+}
+
+
+def split_preset(preset: str) -> tuple[str, str]:
+    """'coding/builder' -> (kind, authority); legacy bare authority -> coding."""
+    if "/" in preset:
+        kind, authority = preset.split("/", 1)
+        if kind in GALLERY and authority in PRESETS:
+            return kind, authority
+    return ("coding", preset) if preset in PRESETS else ("coding", "builder")
+
 
 # -- passwords -----------------------------------------------------------
 def hash_password(password: str) -> str:
@@ -143,8 +182,15 @@ def create_agent(sf, user_id: str, name: str, preset: str) -> dict:
     from eidolon.common import crypto
     from eidolon.data.models import AgentKeyRow, AgentRow
 
-    if preset not in PRESETS:
-        raise ValueError(f"unknown preset {preset!r} (choose from {sorted(PRESETS)})")
+    valid = preset in PRESETS or (
+        "/" in preset
+        and preset.split("/", 1)[0] in GALLERY
+        and preset.split("/", 1)[1] in PRESETS
+    )
+    if not valid:
+        raise ValueError(
+            f"unknown preset {preset!r} (use '<kind>/<authority>' from the gallery, "
+            f"kinds={sorted(GALLERY)}, authorities={sorted(PRESETS)})")
     name = name.strip()[:60] or "unnamed-agent"
     agent = AgentRow(id=f"agt-{secrets.token_urlsafe(8)}", user_id=user_id,
                      name=name, preset=preset,
@@ -240,39 +286,62 @@ def agent_for_gateway_key(sf, key: str | None) -> dict | None:
 
 
 def _agent_dict(a) -> dict:
+    kind, authority = split_preset(a.preset)
     return {"id": a.id, "user_id": a.user_id, "name": a.name, "preset": a.preset,
-            "rank": PRESETS.get(a.preset, {}).get("rank", "OBSERVER"),
+            "kind": kind, "authority": authority,
+            "rank": PRESETS[authority]["rank"],
             "gateway_key": a.gateway_key,
             "created_at": a.created_at.isoformat() if a.created_at else None}
 
 
 # -- paste-and-go gateway config ------------------------------------------
-# Sensible day-one tool policies for the most common first downstream (the MCP
-# filesystem server): reads flow at the preset's ceiling, writes are held —
-# the live feed demonstrates the gate instead of stonewalling the user.
+# Day-one tool-policy packs per agent kind: reads flow at the chosen ceiling,
+# writes/sends are held — the live feed demonstrates the gate instead of
+# stonewalling the user.
 _FS_READ_TOOLS = ["read_file", "read_text_file", "read_multiple_files", "list_directory",
                   "list_directory_with_sizes", "directory_tree", "search_files",
                   "get_file_info", "list_allowed_directories"]
 _FS_WRITE_TOOLS = ["write_file", "edit_file", "create_directory", "move_file"]
 
+
+def _pack(scope: dict, reads: list[str], holds: list[str],
+          sends: list[str] | None = None, sensitive: list[str] | None = None) -> list[dict]:
+    sel = {"selectors": scope}
+    out = [{"tool": t, "action_class": "retrieve-context", "scope": sel,
+            **({"sensitive": True} if t in (sensitive or []) else {})} for t in reads]
+    out += [{"tool": t, "action_class": "commit-action", "scope": sel} for t in holds]
+    out += [{"tool": t, "action_class": "draft-comm", "scope": sel,
+             "touches_exclusions": ["external-client-comm"]} for t in (sends or [])]
+    return out
+
+
+def _policy_pack(kind: str, scope: dict) -> list[dict]:
+    if kind == "research":
+        return _pack(scope, reads=["fetch_url", "get_webpage", "search_web", *_FS_READ_TOOLS],
+                     holds=_FS_WRITE_TOOLS, sensitive=["fetch_url", "get_webpage"])
+    if kind == "comms":
+        return _pack(scope, reads=["read_inbox", "read_calendar", *_FS_READ_TOOLS],
+                     holds=["schedule_event", *_FS_WRITE_TOOLS],
+                     sends=["send_email", "send_message"], sensitive=["read_inbox"])
+    if kind == "devops":
+        return _pack(scope, reads=["get_deploy_status", "get_logs", "get_metrics", *_FS_READ_TOOLS],
+                     holds=["deploy", "rollback", "run_shell", "delete_database", *_FS_WRITE_TOOLS])
+    # coding (default)
+    return _pack(scope, reads=_FS_READ_TOOLS, holds=_FS_WRITE_TOOLS)
+
+
 _SEEDS = [
     "the user will read file contents and list directory entries for the project routinely",
-    "the user will search files and get file info in the project routinely",
-    "the user will draft comms and post status updates for the project routinely",
+    "the user will search files fetch url content and get info in the project routinely",
+    "the user will draft comms post status updates and get deploy status for the project routinely",
 ]
 
 
 def build_connect_config(agent: dict, keypair: dict, base_url: str) -> dict:
     """A complete GatewayConfig dict for this agent — parses and boots as-is."""
-    preset = PRESETS[agent["preset"]]
+    kind, authority = split_preset(agent["preset"])
+    preset = PRESETS[authority]
     scope = {"project": ["workspace"]}
-    policies = [
-        {"tool": t, "action_class": "retrieve-context", "scope": {"selectors": scope}}
-        for t in _FS_READ_TOOLS
-    ] + [
-        {"tool": t, "action_class": "commit-action", "scope": {"selectors": scope}}
-        for t in _FS_WRITE_TOOLS
-    ]
     return {
         "profile_id": "general-continuity",
         "principal_signing_key": keypair["signing"],
@@ -280,7 +349,7 @@ def build_connect_config(agent: dict, keypair: dict, base_url: str) -> dict:
         "permitted_classes": list(preset["permitted_classes"]),
         "max_autonomy": preset["max_autonomy"],
         "seed_memories": [s for s in _SEEDS for _ in range(6)],
-        "tool_policies": policies,
+        "tool_policies": _policy_pack(kind, scope),
         "report_url": base_url,
         "report_key": agent["gateway_key"],
         "gateway_id": agent["id"],

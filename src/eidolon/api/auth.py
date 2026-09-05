@@ -94,7 +94,7 @@ def has_role(role: str | None, minimum: str) -> bool:
 # page + user signup/login are public by design.
 _PUBLIC = {"/health", "/ready", "/login", "/logout", "/whoami", "/favicon.ico",
            "/ingest/events", "/", "/signup", "/auth/signup", "/auth/login",
-           "/auth/logout", "/stats/public"}
+           "/auth/logout", "/stats/public", "/portal"}
 
 # Paths that require a signed-in USER (or the operator admin): the product app.
 _USER_PREFIX = ("/app", "/api/")
@@ -115,6 +115,8 @@ def required_role(method: str, path: str) -> str | None:
     """
     if path in _PUBLIC:
         return None
+    if path == "/mcp" or path.startswith("/mcp/"):
+        return None  # hosted MCP endpoint authenticates itself (agent gateway key)
     if path.startswith(_USER_PREFIX):
         return "user"
     if path.startswith("/challenge"):

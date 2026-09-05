@@ -139,30 +139,62 @@
   <div class="modal">
     <button class="btn mclose" onclick="closeWiz()">✕</button>
     <h3>ENROLL NEW AGENT</h3>
+    <label>What kind of agent is it?</label>
+    <div class="presets" id="wKinds" style="grid-template-columns:repeat(2,1fr)"></div>
     <label>Agent name</label>
     <input id="wName" placeholder="claude-code · hermes · my-bot" maxlength="60" />
-    <label>Authority you delegate (its starting rank)</label>
+    <label>Authority you delegate (recommended for this kind is pre-selected)</label>
     <div class="presets" id="wPresets"></div>
     <button class="newbtn" style="margin-top:16px" id="wGo">▶ MINT CREDENTIAL</button>
     <div class="empty" id="wErr" style="display:none; color:var(--red)"></div>
   </div>
 </div>
 
-<!-- connect modal -->
+<!-- connect modal: three doors -->
 <div class="overlay" id="connect">
   <div class="modal">
     <button class="btn mclose" onclick="closeConn()">✕</button>
     <h3 id="cTitle">CONNECT</h3>
-    <div style="color:var(--dim); font-size:12px">1 · Save this as <b style="color:var(--ink)">gateway.yaml</b>
-      next to where your agent runs (it contains this agent's reporting credential):</div>
-    <div class="snip"><pre id="cYaml"></pre><button class="btn copy" data-t="cYaml">COPY</button></div>
-    <div style="color:var(--dim); font-size:12px; margin-top:14px">2 · Wrap your tools — any MCP
-      server, zero agent changes:</div>
-    <div class="snip"><pre id="cWrap"></pre><button class="btn copy" data-t="cWrap">COPY</button></div>
-    <div style="color:var(--dim); font-size:12px; margin-top:14px">Claude Code? Drop this in
-      <b style="color:var(--ink)">.mcp.json</b> in your project:</div>
-    <div class="snip"><pre id="cMcp"></pre><button class="btn copy" data-t="cMcp">COPY</button></div>
-    <div style="color:var(--dim); font-size:12px; margin-top:14px" id="cHttp"></div>
+    <div class="mode" style="display:flex; gap:0; margin:4px 0 14px; border:1px solid var(--line); border-radius:6px; overflow:hidden">
+      <button type="button" class="tab on" data-tab="managed" style="flex:1; background:var(--accent); color:#0b0714; border:0; padding:9px 0; font-family:var(--pixel); font-size:8px; cursor:pointer">☁ MANAGED</button>
+      <button type="button" class="tab" data-tab="agentsetup" style="flex:1; background:transparent; color:var(--dim); border:0; padding:9px 0; font-family:var(--pixel); font-size:8px; cursor:pointer">🤖 AGENT SETUP</button>
+      <button type="button" class="tab" data-tab="selfhost" style="flex:1; background:transparent; color:var(--dim); border:0; padding:9px 0; font-family:var(--pixel); font-size:8px; cursor:pointer">⌨ SELF-HOSTED</button>
+    </div>
+
+    <div class="tabpane" id="pane-managed">
+      <div style="color:var(--dim); font-size:12.5px">Nothing to install. We host the gateway —
+        your agent adds <b style="color:var(--ink)">one endpoint</b> and gets a governed sandbox
+        toolset immediately (your real tools stay local; wrap them later with the other tabs).</div>
+      <div style="color:var(--dim); font-size:12px; margin-top:12px">Claude Code — one command:</div>
+      <div class="snip"><pre id="mCmd"></pre><button class="btn copy" data-t="mCmd">COPY</button></div>
+      <div style="color:var(--dim); font-size:12px; margin-top:12px">…or any MCP client via config:</div>
+      <div class="snip"><pre id="mJson"></pre><button class="btn copy" data-t="mJson">COPY</button></div>
+      <div style="color:var(--dim); font-size:12px; margin-top:12px">Then ask your agent to
+        <i>“check the time, read the acme customer record, and post a status update”</i> —
+        and watch this dashboard.</div>
+    </div>
+
+    <div class="tabpane" id="pane-agentsetup" style="display:none">
+      <div style="color:var(--dim); font-size:12.5px">Let your agent set itself up. Download the
+        setup file (credentials baked in) and paste it to Claude Code / codex / pi —
+        it installs the local gateway and wraps its own tools.</div>
+      <button class="newbtn" style="margin-top:12px" id="dlSetup">⬇ DOWNLOAD EIDOLON_SETUP.md</button>
+      <div style="color:var(--dim); font-size:12px; margin-top:10px">Then tell your agent:
+        <i>“follow the instructions in EIDOLON_SETUP.md”</i>.</div>
+    </div>
+
+    <div class="tabpane" id="pane-selfhost" style="display:none">
+      <div style="color:var(--dim); font-size:12px">1 · Save as <b style="color:var(--ink)">gateway.yaml</b>
+        next to where your agent runs:</div>
+      <div class="snip"><pre id="cYaml"></pre><button class="btn copy" data-t="cYaml">COPY</button></div>
+      <div style="color:var(--dim); font-size:12px; margin-top:12px">2 · Run the gateway (uvx fetches it —
+        no clone, needs <a href="https://docs.astral.sh/uv/" target="_blank" rel="noopener">uv</a>):</div>
+      <div class="snip"><pre id="cWrap"></pre><button class="btn copy" data-t="cWrap">COPY</button></div>
+      <div style="color:var(--dim); font-size:12px; margin-top:12px">Claude Code? Drop this in
+        <b style="color:var(--ink)">.mcp.json</b> (or run <code id="wrapOne" style="color:var(--cyan)"></code>):</div>
+      <div class="snip"><pre id="cMcp"></pre><button class="btn copy" data-t="cMcp">COPY</button></div>
+      <div style="color:var(--dim); font-size:12px; margin-top:12px" id="cHttp"></div>
+    </div>
   </div>
 </div>
 
@@ -170,7 +202,8 @@
 <script>
 const $ = (id) => document.getElementById(id);
 const esc = (s) => String(s ?? "").replace(/[&<>]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;"}[c]));
-let PRESETS = {}, selPreset = "reader", achieved = {};
+let PRESETS = {}, GALLERY = {}, selPreset = "builder", selKind = "coding", achieved = {};
+let currentSetupMd = "", currentAgentName = "agent";
 
 function toast(msg) {
   const t = $("toast"); t.textContent = msg; t.style.display = "block";
@@ -224,18 +257,29 @@ async function loadAgents() {
   });
 }
 
-// --- wizard ------------------------------------------------------------
-function openWiz() {
+// --- wizard (gallery-first) ---------------------------------------------
+function renderWiz() {
+  $("wKinds").innerHTML = Object.entries(GALLERY).map(([k, g]) => `
+    <div class="preset ${k === selKind ? "sel" : ""}" data-k="${k}">
+      <div class="pr" style="font-family:var(--pixel); font-size:8px; color:var(--cyan)">${esc(g.label).toUpperCase()}</div>
+      <div class="pd">${esc(g.examples)}</div>
+      <div class="pd" style="margin-top:6px">${esc(g.desc)}</div>
+    </div>`).join("");
+  document.querySelectorAll("#wKinds .preset").forEach(el => el.onclick = () => {
+    selKind = el.dataset.k;
+    selPreset = GALLERY[selKind].authority;  // recommended authority
+    renderWiz();
+  });
   $("wPresets").innerHTML = Object.entries(PRESETS).map(([k, p]) => `
     <div class="preset ${k === selPreset ? "sel" : ""}" data-k="${k}">
-      <div class="pr rank ${esc(p.rank)}" style="background:none">${esc(p.rank)}</div>
+      <div class="pr rank ${esc(p.rank)}" style="background:none">${esc(p.rank)}${GALLERY[selKind] && GALLERY[selKind].authority === k ? " ★" : ""}</div>
       <div class="pd">${esc(p.blurb)}</div>
     </div>`).join("");
-  document.querySelectorAll(".preset").forEach(el => el.onclick = () => {
-    selPreset = el.dataset.k; openWiz();
+  document.querySelectorAll("#wPresets .preset").forEach(el => el.onclick = () => {
+    selPreset = el.dataset.k; renderWiz();
   });
-  $("wizard").classList.add("open");
 }
+function openWiz() { renderWiz(); $("wizard").classList.add("open"); }
 function closeWiz() { $("wizard").classList.remove("open"); }
 $("newAgent").onclick = openWiz;
 $("wGo").onclick = async () => {
@@ -243,25 +287,52 @@ $("wGo").onclick = async () => {
   if (!name) { $("wName").focus(); return; }
   const r = await fetch("/api/agents", { method: "POST",
     headers: { "content-type": "application/json" },
-    body: JSON.stringify({ name, preset: selPreset }) });
+    body: JSON.stringify({ name, preset: `${selKind}/${selPreset}` }) });
   const d = await r.json().catch(() => ({}));
   if (!r.ok) { $("wErr").style.display = "block"; $("wErr").textContent = d.detail || "failed"; return; }
   closeWiz(); toast("🏅 AGENT ENROLLED — " + d.rank);
   await loadAgents(); openConn(d.id);
 };
 
-// --- connect modal ------------------------------------------------------
+// --- connect modal: three doors -----------------------------------------
+function showTab(which) {
+  document.querySelectorAll(".tab").forEach(t => {
+    const on = t.dataset.tab === which;
+    t.classList.toggle("on", on);
+    t.style.background = on ? "var(--accent)" : "transparent";
+    t.style.color = on ? "#0b0714" : "var(--dim)";
+  });
+  document.querySelectorAll(".tabpane").forEach(p =>
+    p.style.display = p.id === "pane-" + which ? "" : "none");
+}
+document.querySelectorAll(".tab").forEach(t => t.onclick = () => showTab(t.dataset.tab));
+
 async function openConn(id) {
   const r = await fetch(`/api/agents/${id}/connect`); if (!r.ok) return;
   const c = await r.json();
+  currentAgentName = c.agent.name; currentSetupMd = c.agent_setup_md;
   $("cTitle").textContent = "CONNECT · " + c.agent.name.toUpperCase();
+  // managed
+  $("mCmd").textContent = c.managed.claude_code_cmd;
+  $("mJson").textContent = JSON.stringify(c.managed.mcp_json, null, 2);
+  // self-hosted
   $("cYaml").textContent = c.gateway_yaml;
-  $("cWrap").textContent = c.wrap_command;
-  $("cMcp").textContent = JSON.stringify(c.claude_code_mcp_json, null, 2);
-  $("cHttp").textContent = "Remote/HTTP mode: " + c.http_hint;
+  $("cWrap").textContent = c.selfhost.gateway_cmd;
+  $("cMcp").textContent = JSON.stringify(c.selfhost.mcp_json, null, 2);
+  $("wrapOne").textContent = c.selfhost.wrap_cmd;
+  $("cHttp").textContent = "Remote/HTTP mode: " + c.selfhost.http_hint;
+  showTab("managed");
   $("connect").classList.add("open");
 }
 function closeConn() { $("connect").classList.remove("open"); }
+$("dlSetup").onclick = () => {
+  const blob = new Blob([currentSetupMd], { type: "text/markdown" });
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob);
+  a.download = "EIDOLON_SETUP.md";
+  a.click(); URL.revokeObjectURL(a.href);
+  toast("⬇ hand EIDOLON_SETUP.md to your agent");
+};
 document.querySelectorAll(".copy").forEach(b => b.onclick = async () => {
   await navigator.clipboard.writeText($(b.dataset.t).textContent);
   b.textContent = "COPIED"; setTimeout(() => b.textContent = "COPY", 1200);
@@ -308,6 +379,9 @@ $("logout").onclick = async (e) => {
   const me = await (await fetch("/api/me")).json().catch(() => ({}));
   $("who").textContent = me.email || (me.admin ? "operator" : "");
   PRESETS = await (await fetch("/api/presets")).json().catch(() => ({}));
+  GALLERY = await (await fetch("/api/gallery")).json().catch(() => ({}));
+  selKind = Object.keys(GALLERY)[0] || "coding";
+  selPreset = (GALLERY[selKind] || {}).authority || "builder";
   const recent = await (await fetch("/api/feed/recent?limit=50")).json().catch(() => []);
   recent.forEach(e => pushEvent(e, false));
   achieved.first = recent.length > 0 ? 1 : 0;

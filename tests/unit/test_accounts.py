@@ -108,7 +108,10 @@ def test_agent_lifecycle_and_connect(client) -> None:
     conn = client.get(f"/api/agents/{agent['id']}/connect").json()
     assert agent["gateway_key"] in conn["gateway_yaml"]
     assert agent["id"] in conn["gateway_yaml"]
-    assert "claude_code_mcp_json" in conn
+    # three doors: managed / agent-setup / self-hosted
+    assert agent["gateway_key"] in conn["managed"]["claude_code_cmd"]
+    assert "EIDOLON setup" in conn["agent_setup_md"]
+    assert "uvx --from git+" in conn["selfhost"]["gateway_cmd"]
 
     assert client.delete(f"/api/agents/{agent['id']}").json() == {"deleted": agent["id"]}
     assert client.get("/api/agents").json() == []

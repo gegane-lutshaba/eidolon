@@ -22,6 +22,10 @@ dependencies = [
     "httpx>=0.27",
 ]
 
+[project.scripts]
+eidolon-gateway = "eidolon.gateway.__main__:main"
+eidolon-wrap = "eidolon.wrap:main"
+
 [project.optional-dependencies]
 # SAGE Python SDK. The exact distribution name is bound at install time; see
 # src/eidolon/sage/client_adapter.py. Kept optional so the fast (in-memory)

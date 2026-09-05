@@ -1,0 +1,96 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>ONYX ARCADE — enter EIDOLON</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap" rel="stylesheet" />
+<style>
+  :root { --bg:#05070c; --ink:#d7e0ea; --dim:#7a8699; --green:#39d98a; --red:#ff5c5c;
+    --cyan:#4fc7ff; --accent:#8b7bff; --pixel:"Press Start 2P", monospace; }
+  * { box-sizing:border-box; }
+  html, body { height:100%; }
+  body { margin:0; background:var(--bg); color:var(--ink); overflow:hidden;
+    font:14px/1.6 ui-monospace,Menlo,Consolas,monospace;
+    display:flex; align-items:center; justify-content:center; }
+  /* CRT */
+  body::before { content:""; position:fixed; inset:0; pointer-events:none; z-index:9;
+    background:repeating-linear-gradient(0deg, rgba(0,0,0,.18) 0 1px, transparent 1px 3px); }
+  body::after { content:""; position:fixed; inset:0; pointer-events:none; z-index:9;
+    background:radial-gradient(ellipse at center, transparent 50%, rgba(0,0,0,.55) 100%); }
+  /* perspective grid floor */
+  .grid { position:fixed; left:-50%; right:-50%; bottom:-12%; height:52%; z-index:1;
+    background:
+      linear-gradient(transparent 0, rgba(139,123,255,.06) 100%),
+      repeating-linear-gradient(90deg, rgba(139,123,255,.35) 0 2px, transparent 2px 84px),
+      repeating-linear-gradient(0deg, rgba(139,123,255,.30) 0 2px, transparent 2px 44px);
+    transform:perspective(420px) rotateX(62deg);
+    animation:scroll 2.6s linear infinite; }
+  @keyframes scroll { from { background-position:0 0, 0 0, 0 0; }
+                      to { background-position:0 0, 0 0, 0 44px; } }
+  .stars { position:fixed; inset:0; z-index:0; }
+  .star { position:absolute; width:2px; height:2px; background:#fff; border-radius:50%;
+    animation:tw 2.8s ease-in-out infinite; }
+  @keyframes tw { 0%,100% { opacity:.15; } 50% { opacity:.9; } }
+  main { position:relative; z-index:10; text-align:center; padding:0 20px; }
+  .marq { font-family:var(--pixel); font-size:10px; color:var(--amber, #f2b84b);
+    letter-spacing:2px; animation:blink 1.2s steps(2) infinite; }
+  @keyframes blink { 50% { opacity:.25; } }
+  pre.logo { color:var(--accent); font-size:clamp(5px, 1.35vw, 10px); line-height:1.22;
+    display:inline-block; text-align:left; margin:22px 0 8px;
+    text-shadow:0 0 18px rgba(139,123,255,.65); animation:glow 3s ease-in-out infinite; }
+  @keyframes glow { 50% { text-shadow:0 0 34px rgba(139,123,255,.95); } }
+  h1 { font-family:var(--pixel); font-size:clamp(11px, 2.4vw, 17px); line-height:1.8; margin:8px 0 6px; }
+  h1 .g { color:var(--green); } h1 .c { color:var(--cyan); } h1 .r { color:var(--red); }
+  .sub { color:var(--dim); font-size:13px; max-width:520px; margin:0 auto 26px; }
+  .coin { display:inline-block; font-family:var(--pixel); font-size:13px; padding:18px 30px;
+    background:var(--accent); color:#0b0714; border-radius:5px; text-decoration:none;
+    box-shadow:0 7px 0 #5c4fd1, 0 0 34px rgba(139,123,255,.4);
+    animation:bounce 1.6s ease-in-out infinite; }
+  .coin:hover { animation:none; transform:translateY(3px); box-shadow:0 4px 0 #5c4fd1; }
+  @keyframes bounce { 0%,100% { transform:none; } 50% { transform:translateY(-4px); } }
+  .cd { margin-top:22px; color:var(--dim); font-size:12px; }
+  .cd b { color:var(--cyan); font-family:var(--pixel); font-size:11px; }
+</style>
+</head>
+<body>
+<div class="stars" id="stars"></div>
+<div class="grid"></div>
+<main>
+  <div class="marq">★ ONYX ARCADE PRESENTS ★</div>
+  <pre class="logo">
+▓█████  ██▓▓█████▄  ▒█████   ██▓     ▒█████   ███▄    █
+▓█   ▀ ▓██▒▒██▀ ██▌▒██▒  ██▒▓██▒    ▒██▒  ██▒ ██ ▀█   █
+▒███   ▒██▒░██   █▌▒██░  ██▒▒██░    ▒██░  ██▒▓██  ▀█ ██▒
+▒▓█  ▄ ░██░░▓█▄   ▌▒██   ██░▒██░    ▒██   ██░▓██▒  ▐▌██▒
+░▒████▒░██░░▒████▓ ░ ████▓▒░░██████▒░ ████▓▒░▒██░   ▓██░
+░░ ▒░ ░░▓   ▒▒▓  ▒ ░ ▒░▒░▒░ ░ ▒░▓  ░░ ▒░▒░▒░ ░ ▒░   ▒ ▒</pre>
+  <h1>YOUR AGENT. <span class="g">SEEN.</span> <span class="c">BOUNDED.</span> <span class="r">REVOCABLE.</span></h1>
+  <div class="sub">The authority layer for AI agents — watch every tool call live,
+    delegate exactly what you choose, kill it mid-session. Cryptographically enforced.</div>
+  <a class="coin" href="https://eidolon.onyxcreator.com/">▶ INSERT COIN</a>
+  <div class="cd">auto-boarding in <b id="n">15</b>s · <a href="https://eidolon.onyxcreator.com/challenge" style="color:var(--cyan)">or try to break the gate first</a></div>
+</main>
+<script>
+// starfield
+const stars = document.getElementById("stars");
+for (let i = 0; i < 90; i++) {
+  const s = document.createElement("div");
+  s.className = "star";
+  s.style.left = Math.random() * 100 + "%";
+  s.style.top = Math.random() * 100 + "%";
+  s.style.animationDelay = (Math.random() * 2.8) + "s";
+  s.style.opacity = .1 + Math.random() * .5;
+  stars.appendChild(s);
+}
+// countdown redirect
+let n = 15;
+const el = document.getElementById("n");
+const t = setInterval(() => {
+  n -= 1; el.textContent = n;
+  if (n <= 0) { clearInterval(t); window.location = "https://eidolon.onyxcreator.com/"; }
+}, 1000);
+</script>
+</body>
+</html>

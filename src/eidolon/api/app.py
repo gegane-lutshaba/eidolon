@@ -287,6 +287,16 @@ def api_presets() -> dict:
     return {k: {kk: vv for kk, vv in v.items()} for k, v in accounts_svc.PRESETS.items()}
 
 
+@app.get("/api/gallery")
+def api_gallery() -> dict:
+    """The delegation gallery: agent types with recommended authority."""
+    out = {}
+    for kind, g in accounts_svc.GALLERY.items():
+        preset = accounts_svc.PRESETS[g["authority"]]
+        out[kind] = {**g, "rank": preset["rank"], "max_autonomy": preset["max_autonomy"]}
+    return out
+
+
 @app.post("/api/agents")
 def api_create_agent(request: Request, name: str = Body(...),
                      preset: str = Body(default="reader")) -> dict:
@@ -345,7 +355,8 @@ def api_agent_connect(request: Request, agent_id: str) -> dict:
         keypair = {"signing": "<paste your principal signing key (hex)>"}
     settings = runtime().settings
     base = (settings.public_url or "http://localhost:8000").rstrip("/")
-    preset = accounts_svc.PRESETS[agent["preset"]]
+    _, authority = accounts_svc.split_preset(agent["preset"])
+    preset = accounts_svc.PRESETS[authority]
     cfg = accounts_svc.build_connect_config(agent, keypair, base)
     header = (
         f"# EIDOLON gateway config — {agent['name']} · rank {preset['rank']}\n"
@@ -353,24 +364,80 @@ def api_agent_connect(request: Request, agent_id: str) -> dict:
         f"# Tune tool_policies for your own tool servers (unmapped tools escalate).\n"
     )
     gateway_yaml = header + _yaml.safe_dump(cfg, sort_keys=False, width=100)
-    wrap_cmd = (
-        "uv run python -m eidolon.gateway --config gateway.yaml \\\n"
-        "  -- npx -y @modelcontextprotocol/server-filesystem ."
-    )
-    mcp_json = {
-        "mcpServers": {
-            f"eidolon-{agent['name']}": {
-                "command": "uv",
-                "args": ["run", "python", "-m", "eidolon.gateway",
-                         "--config", "gateway.yaml",
-                         "--", "npx", "-y", "@modelcontextprotocol/server-filesystem", "."],
-            }
-        }
+
+    # DOOR 1 — MANAGED (nothing to install): one URL + one header.
+    managed = {
+        "url": f"{base}/mcp",
+        "header": f"Authorization: Bearer {agent['gateway_key']}",
+        "claude_code_cmd": (
+            f"claude mcp add --transport http eidolon {base}/mcp "
+            f"--header \"Authorization: Bearer {agent['gateway_key']}\""
+        ),
+        "mcp_json": {"mcpServers": {"eidolon": {
+            "type": "http", "url": f"{base}/mcp",
+            "headers": {"Authorization": f"Bearer {agent['gateway_key']}"}}}},
+    }
+    # DOOR 2 — AGENT SETUP: a file the user hands their agent; it does the rest.
+    setup_md = _agent_setup_md(agent, gateway_yaml, base)
+    # DOOR 3 — SELF-HOSTED: uvx one-liners (no clone needed).
+    repo = "git+https://gitlab.com/mthandazogegane/eidolon"
+    selfhost = {
+        "gateway_cmd": (
+            f"uvx --from {repo} eidolon-gateway --config gateway.yaml \\\n"
+            "  -- npx -y @modelcontextprotocol/server-filesystem ."
+        ),
+        "wrap_cmd": f"uvx --from {repo} eidolon-wrap   # wraps ./.mcp.json in place",
+        "mcp_json": {"mcpServers": {f"eidolon-{agent['name']}": {
+            "command": "uvx",
+            "args": ["--from", repo, "eidolon-gateway", "--config", "gateway.yaml",
+                     "--", "npx", "-y", "@modelcontextprotocol/server-filesystem", "."]}}},
+        "http_hint": "add --http 8300 and point remote agents at http://<host>:8300/mcp",
     }
     return {"agent": {k: v for k, v in agent.items() if k != "user_id"},
-            "gateway_yaml": gateway_yaml, "wrap_command": wrap_cmd,
-            "claude_code_mcp_json": mcp_json,
-            "http_hint": "add --http 8300 and point remote agents at http://<host>:8300/mcp"}
+            "gateway_yaml": gateway_yaml,
+            "managed": managed, "agent_setup_md": setup_md, "selfhost": selfhost}
+
+
+def _agent_setup_md(agent: dict, gateway_yaml: str, base: str) -> str:
+    """The file a user hands to Claude Code / codex / pi: the agent sets up
+    its own governance. Credentials are baked in — nothing to look up."""
+    repo = "git+https://gitlab.com/mthandazogegane/eidolon"
+    return f"""# EIDOLON setup — do this now
+
+You are being placed under EIDOLON governance (your operator chose this).
+Perform these steps in the current project, then confirm each with its output.
+
+## 1. Ensure `uv` is installed
+Run `uv --version`. If missing, install it:
+`curl -LsSf https://astral.sh/uv/install.sh | sh` (macOS/Linux).
+
+## 2. Save the gateway config
+Write the following EXACTLY to `./gateway.yaml` (it contains this project's
+delegated authority and reporting credential — do not alter it):
+
+```yaml
+{gateway_yaml}```
+
+## 3. Wrap your MCP tool servers
+If `./.mcp.json` exists, run:
+`uvx --from {repo} eidolon-wrap`
+Otherwise create `./.mcp.json` with:
+
+```json
+{{"mcpServers": {{"eidolon-{agent["name"]}": {{
+  "command": "uvx",
+  "args": ["--from", "{repo}", "eidolon-gateway", "--config", "gateway.yaml",
+           "--", "npx", "-y", "@modelcontextprotocol/server-filesystem", "."]}}}}}}
+```
+
+## 4. Verify
+Restart your MCP connection (or ask your operator to restart you), call a read
+tool (e.g. list the directory), and report the `[EIDOLON: …]` attestation line
+from the result. Your operator will see the action live at {base}/app.
+
+Note: after this setup, some of your tool calls will be held for approval or
+denied. That is intended and correct — do not attempt to bypass the gateway.
+"""
 
 
 @app.get("/api/feed/recent")
@@ -441,6 +508,12 @@ def landing() -> str:
 @app.get("/signup", response_class=HTMLResponse)
 def signup_page() -> str:
     return (_STATIC / "signup.html").read_text(encoding="utf-8")
+
+
+@app.get("/portal", response_class=HTMLResponse)
+def portal_page() -> str:
+    """The ONYX ARCADE portal served at the root domain (via Caddy rewrite)."""
+    return (_STATIC / "portal.html").read_text(encoding="utf-8")
 
 
 @app.get("/app", response_class=HTMLResponse)
@@ -904,3 +977,18 @@ def coaching_report(aspiration: Aspiration = Body(...)) -> dict:
     attestations = rt.horkos.replay(ReplayFilter(principal_id=aspiration.principal_id, limit=5000))
     report = Coach().coach(aspiration, attestations)
     return report.model_dump(mode="json")
+
+
+# -- managed tier: the platform-hosted MCP gateway -------------------------
+# One URL + one header (the agent's egk key) = a governed toolset, nothing to
+# install. Registered as an exact-path ASGI route (a Mount would 307 /mcp ->
+# /mcp/, which strict MCP clients refuse). Self-authenticating.
+from starlette.routing import Route  # noqa: E402
+
+from eidolon.api.hosted import HostedMCP  # noqa: E402
+
+_hosted_mcp = HostedMCP(
+    resolve_agent=lambda key: accounts_svc.agent_for_gateway_key(_live_store(), key),
+    store=_live_store, hub=_live_hub,
+)
+app.router.routes.append(Route("/mcp", _hosted_mcp, methods=["GET", "POST", "DELETE"]))

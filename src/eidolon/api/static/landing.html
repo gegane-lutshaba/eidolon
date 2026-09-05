@@ -28,7 +28,15 @@
   .logo { font-family:var(--pixel); font-size:13px; color:var(--accent); letter-spacing:1px; }
   nav .links { display:flex; gap:18px; font-size:13px; }
   /* hero */
-  .hero { text-align:center; padding:52px 0 30px; }
+  .hero { text-align:center; padding:52px 0 30px; position:relative; }
+  .hero .gridbg { position:absolute; left:-30%; right:-30%; bottom:-40px; height:46%; z-index:-1;
+    opacity:.5; background:
+      repeating-linear-gradient(90deg, rgba(139,123,255,.22) 0 1px, transparent 1px 72px),
+      repeating-linear-gradient(0deg, rgba(139,123,255,.18) 0 1px, transparent 1px 38px);
+    transform:perspective(420px) rotateX(60deg);
+    animation:gridscroll 3s linear infinite;
+    mask-image:linear-gradient(transparent, black 60%); }
+  @keyframes gridscroll { to { background-position: 0 0, 0 38px; } }
   .hero pre { color:var(--accent); font-size:9px; line-height:1.25; margin:0 auto 22px;
     display:inline-block; text-align:left; text-shadow:0 0 12px rgba(139,123,255,.45); }
   h1 { font-family:var(--pixel); font-size:clamp(15px, 3.4vw, 26px); line-height:1.7;
@@ -103,6 +111,7 @@
   </nav>
 
   <div class="hero">
+    <div class="gridbg"></div>
     <pre>
 ▓█████  ██▓▓█████▄  ▒█████   ██▓     ▒█████   ███▄    █
 ▓█   ▀ ▓██▒▒██▀ ██▌▒██▒  ██▒▓██▒    ▒██▒  ██▒ ██ ▀█   █
