@@ -53,7 +53,9 @@ def test_password_hash_roundtrip() -> None:
 # --- signup / login / session -------------------------------------------
 def test_signup_login_logout(client) -> None:
     _signup(client)
-    assert client.get("/api/me").json() == {"admin": False, "email": "ada@example.com"}
+    me = client.get("/api/me").json()
+    assert me["admin"] is False and me["email"] == "ada@example.com"
+    assert me["org"]["personal"] is True and me["role"] == "owner"  # personal org on signup
 
     client.post("/auth/logout")
     client.cookies.clear()
@@ -209,3 +211,49 @@ def test_expanded_gallery_kinds(client) -> None:
     a = client.post("/api/agents", json={"name": "ap-bot", "preset": "finance/reader"}).json()
     conn = client.get(f"/api/agents/{a['id']}/connect").json()
     assert "wire_funds" in conn["gateway_yaml"] and "read_ledger" in conn["gateway_yaml"]
+
+
+# --- teams / orgs -------------------------------------------------------
+def test_personal_org_and_agent_scoping(client) -> None:
+    _signup(client)
+    orgs = client.get("/api/orgs").json()
+    assert len(orgs) == 1 and orgs[0]["personal"] and orgs[0]["role"] == "owner"
+    a = client.post("/api/agents", json={"name": "cc", "preset": "coding/builder"}).json()
+    assert a["id"] in [x["id"] for x in client.get("/api/agents").json()]
+
+
+def test_invite_join_and_cross_org_isolation(client) -> None:
+    # owner (ada) makes an agent + an admin invite
+    _signup(client, "ada@example.com")
+    ada_agent = client.post("/api/agents", json={"name": "adas"}).json()
+    code = client.post("/api/orgs/invite", json={"role": "member"}).json()["code"]
+    client.post("/auth/logout")
+    client.cookies.clear()
+
+    # bob signs up (own personal org) — cannot see ada's agent
+    _signup(client, "bob@example.com")
+    assert client.get("/api/agents").json() == []
+    # bob joins ada's org via the invite -> now sees the shared agent
+    joined = client.post("/api/orgs/join", json={"code": code})
+    assert joined.status_code == 200
+    names = [x["name"] for x in client.get("/api/agents").json()]
+    assert "adas" in names
+    assert client.get(f"/api/agents/{ada_agent['id']}/connect").status_code == 200
+
+
+def test_auditor_is_read_only(client) -> None:
+    _signup(client, "ada@example.com")
+    code = client.post("/api/orgs/invite", json={"role": "auditor"}).json()["code"]
+    client.post("/auth/logout")
+    client.cookies.clear()
+    _signup(client, "aud@example.com")
+    client.post("/api/orgs/join", json={"code": code})
+    # switch into ada's org (join set the cookie already)
+    assert client.get("/api/agents").status_code == 200          # can view
+    r = client.post("/api/agents", json={"name": "x"})
+    assert r.status_code == 403                                   # cannot create
+
+
+def test_switch_requires_membership(client) -> None:
+    _signup(client, "ada@example.com")
+    assert client.post("/api/orgs/switch", json={"org_id": "org-nope"}).status_code == 403

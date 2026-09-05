@@ -117,13 +117,45 @@
 </head>
 <body>
 <header>
-  <span class="logo">EIDOLON <span style="color:var(--dim);font-size:9px">MISSION CONTROL</span></span>
-  <span style="display:flex; gap:16px; align-items:center">
+  <span class="logo"><img src="/favicon.svg" width="18" height="18" alt="" style="vertical-align:-3px"/> EIDOLON <span style="color:var(--dim);font-size:9px">MISSION CONTROL</span></span>
+  <span style="display:flex; gap:14px; align-items:center; flex-wrap:wrap">
+    <select id="orgSel" title="team"
+      style="background:var(--bg);border:1px solid var(--line);color:var(--ink);border-radius:7px;padding:6px 9px;font-family:inherit;font-size:12px"></select>
+    <button class="btn" id="teamBtn" style="font-size:8px">👥 TEAM</button>
     <span class="conn"><span class="dot" id="sse"></span><span id="sseTxt">connecting…</span></span>
     <span class="who" id="who"></span>
     <a href="#" id="logout" style="font-size:12px">log out</a>
   </span>
 </header>
+
+<!-- team modal -->
+<div class="overlay" id="team">
+  <div class="modal">
+    <button class="btn mclose" onclick="document.getElementById('team').classList.remove('open')">✕</button>
+    <h3 id="teamTitle">TEAM</h3>
+    <div id="members" style="margin-bottom:14px"></div>
+    <div id="adminOnly">
+      <label>Invite a teammate (role)</label>
+      <div style="display:flex; gap:8px; flex-wrap:wrap">
+        <select id="invRole" style="background:var(--bg);border:1px solid var(--line);color:var(--ink);border-radius:7px;padding:9px;font-family:inherit;font-size:12px">
+          <option value="member">member — operate agents</option>
+          <option value="admin">admin — manage team</option>
+          <option value="auditor">auditor — read-only</option>
+        </select>
+        <button class="newbtn" id="invBtn" style="width:auto">GENERATE INVITE LINK</button>
+      </div>
+      <div class="snip" id="invWrap" style="display:none"><pre id="invLink"></pre><button class="copy" data-t="invLink">COPY</button></div>
+      <hr style="border-color:var(--line); margin:16px 0"/>
+      <label>New team</label>
+      <div style="display:flex; gap:8px"><input id="newOrgName" placeholder="team name" />
+        <button class="newbtn" id="newOrgBtn" style="width:auto">CREATE</button></div>
+    </div>
+    <div style="margin-top:14px"><label>Have an invite code?</label>
+      <div style="display:flex; gap:8px"><input id="joinCode" placeholder="inv_…" />
+        <button class="newbtn" id="joinBtn" style="width:auto">JOIN</button></div>
+    </div>
+  </div>
+</div>
 <main>
   <div>
     <div class="panel">
@@ -390,9 +422,58 @@ $("logout").onclick = async (e) => {
   e.preventDefault(); await fetch("/auth/logout", { method: "POST" }); window.location = "/";
 };
 
+// --- teams / orgs -------------------------------------------------------
+let ME = {};
+function renderOrgs() {
+  const sel = $("orgSel");
+  sel.innerHTML = (ME.orgs || []).map(o =>
+    `<option value="${esc(o.id)}" ${ME.org && o.id===ME.org.id?"selected":""}>${esc(o.name)}${o.personal?" (personal)":""}</option>`).join("");
+}
+$("orgSel").onchange = async () => {
+  await fetch("/api/orgs/switch", { method:"POST", headers:{"content-type":"application/json"},
+    body: JSON.stringify({ org_id: $("orgSel").value }) });
+  location.reload();
+};
+$("teamBtn").onclick = async () => {
+  const admin = ME.role === "admin" || ME.role === "owner";
+  $("teamTitle").textContent = "TEAM · " + (ME.org ? ME.org.name : "");
+  $("adminOnly").style.display = admin ? "" : "none";
+  const members = await (await fetch("/api/orgs/members")).json().catch(() => []);
+  $("members").innerHTML = `<label>Members</label>` + members.map(m =>
+    `<div style="display:flex;justify-content:space-between;font-size:12.5px;padding:4px 0">
+      <span>${esc(m.email)}</span><span style="color:var(--accent)">${esc(m.role)}</span></div>`).join("");
+  $("team").classList.add("open");
+};
+$("invBtn") && ($("invBtn").onclick = async () => {
+  const r = await fetch("/api/orgs/invite", { method:"POST", headers:{"content-type":"application/json"},
+    body: JSON.stringify({ role: $("invRole").value }) });
+  const d = await r.json().catch(() => ({}));
+  if (r.ok) { $("invWrap").style.display="block"; $("invLink").textContent = d.join || d.code; }
+});
+$("newOrgBtn") && ($("newOrgBtn").onclick = async () => {
+  const name = $("newOrgName").value.trim(); if (!name) return;
+  const r = await fetch("/api/orgs", { method:"POST", headers:{"content-type":"application/json"},
+    body: JSON.stringify({ name }) });
+  if (r.ok) location.reload();
+});
+$("joinBtn").onclick = async () => {
+  const code = $("joinCode").value.trim(); if (!code) return;
+  const r = await fetch("/api/orgs/join", { method:"POST", headers:{"content-type":"application/json"},
+    body: JSON.stringify({ code }) });
+  if (r.ok) location.reload(); else toast("invalid invite");
+};
+
 (async () => {
-  const me = await (await fetch("/api/me")).json().catch(() => ({}));
-  $("who").textContent = me.email || (me.admin ? "operator" : "");
+  // honor an ?invite=code deep link (redeem, then clean the URL)
+  const inv = new URLSearchParams(location.search).get("invite");
+  if (inv) {
+    await fetch("/api/orgs/join", { method:"POST", headers:{"content-type":"application/json"},
+      body: JSON.stringify({ code: inv }) }).catch(() => {});
+    history.replaceState({}, "", "/app");
+  }
+  ME = await (await fetch("/api/me")).json().catch(() => ({}));
+  $("who").textContent = ME.email || (ME.admin ? "operator" : "");
+  renderOrgs();
   PRESETS = await (await fetch("/api/presets")).json().catch(() => ({}));
   GALLERY = await (await fetch("/api/gallery")).json().catch(() => ({}));
   selKind = Object.keys(GALLERY)[0] || "coding";

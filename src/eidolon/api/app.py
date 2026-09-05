@@ -264,6 +264,9 @@ def auth_logout(request: Request) -> Response:
     return resp
 
 
+ORG_COOKIE = "eidolon_org"
+
+
 def _req_user(request: Request) -> dict:
     user = current_user(request)
     if user is None:
@@ -271,12 +274,95 @@ def _req_user(request: Request) -> dict:
     return user
 
 
+def _active_org(request: Request, user: dict) -> tuple[str, str]:
+    """(org_id, role) for the request — the org cookie if the user is a member,
+    else their personal org (created/backfilled on demand)."""
+    sf = _live_store()
+    cookie = request.cookies.get(ORG_COOKIE)
+    if cookie:
+        role = accounts_svc.role_in_org(sf, cookie, user["id"])
+        if role:
+            return cookie, role
+    org_id = accounts_svc.ensure_personal_org(sf, user["id"], user["email"])
+    return org_id, accounts_svc.role_in_org(sf, org_id, user["id"]) or "owner"
+
+
+def _req_org(request: Request, minimum: str) -> tuple[dict, str]:
+    """Require a signed-in user with >= `minimum` role in the active org.
+    Returns (user, org_id)."""
+    user = _req_user(request)
+    org_id, role = _active_org(request, user)
+    if not accounts_svc.has_org_role(role, minimum):
+        raise HTTPException(status_code=403, detail=f"{minimum} role required (you are {role})")
+    return user, org_id
+
+
 @app.get("/api/me")
 def api_me(request: Request) -> dict:
     user = current_user(request)
     if user is None:  # operator admin passing the middleware
-        return {"admin": True, "email": None}
-    return {"admin": False, "email": user["email"]}
+        return {"admin": True, "email": None, "orgs": [], "org": None, "role": None}
+    org_id, role = _active_org(request, user)
+    orgs = accounts_svc.orgs_for_user(_live_store(), user["id"])
+    active = next((o for o in orgs if o["id"] == org_id), None)
+    return {"admin": False, "email": user["email"], "orgs": orgs,
+            "org": active, "role": role}
+
+
+@app.get("/api/orgs")
+def api_orgs(request: Request) -> list[dict]:
+    user = _req_user(request)
+    accounts_svc.ensure_personal_org(_live_store(), user["id"], user["email"])
+    return accounts_svc.orgs_for_user(_live_store(), user["id"])
+
+
+@app.post("/api/orgs")
+def api_create_org(request: Request, name: str = Body(..., embed=True)) -> Response:
+    user = _req_user(request)
+    org = accounts_svc.create_org(_live_store(), user["id"], name)
+    resp = JSONResponse(org)
+    resp.set_cookie(ORG_COOKIE, org["id"], httponly=True, samesite="lax",
+                    secure=runtime().settings.session_cookie_secure, max_age=7 * 24 * 3600, path="/")
+    return resp
+
+
+@app.post("/api/orgs/switch")
+def api_switch_org(request: Request, org_id: str = Body(..., embed=True)) -> Response:
+    user = _req_user(request)
+    if accounts_svc.role_in_org(_live_store(), org_id, user["id"]) is None:
+        raise HTTPException(status_code=403, detail="not a member of that org")
+    resp = JSONResponse({"ok": True, "org_id": org_id})
+    resp.set_cookie(ORG_COOKIE, org_id, httponly=True, samesite="lax",
+                    secure=runtime().settings.session_cookie_secure, max_age=7 * 24 * 3600, path="/")
+    return resp
+
+
+@app.get("/api/orgs/members")
+def api_org_members(request: Request) -> list[dict]:
+    _user, org_id = _req_org(request, "auditor")
+    return accounts_svc.list_members(_live_store(), org_id)
+
+
+@app.post("/api/orgs/invite")
+def api_org_invite(request: Request, role: str = Body(default="member", embed=True)) -> dict:
+    _user, org_id = _req_org(request, "admin")
+    code = accounts_svc.create_invite(_live_store(), org_id, role)
+    base = (runtime().settings.public_url or "").rstrip("/")
+    return {"code": code, "role": role,
+            "join": f"{base}/app?invite={code}" if base else f"/app?invite={code}"}
+
+
+@app.post("/api/orgs/join")
+def api_org_join(request: Request, code: str = Body(..., embed=True)) -> Response:
+    user = _req_user(request)
+    try:
+        org = accounts_svc.redeem_invite(_live_store(), user["id"], code)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    resp = JSONResponse(org)
+    resp.set_cookie(ORG_COOKIE, org["id"], httponly=True, samesite="lax",
+                    secure=runtime().settings.session_cookie_secure, max_age=7 * 24 * 3600, path="/")
+    return resp
 
 
 @app.get("/api/presets")
@@ -297,31 +383,31 @@ def api_gallery() -> dict:
 @app.post("/api/agents")
 def api_create_agent(request: Request, name: str = Body(...),
                      preset: str = Body(default="reader")) -> dict:
-    user = _req_user(request)
+    user, org_id = _req_org(request, "member")
     try:
-        return accounts_svc.create_agent(_live_store(), user["id"], name, preset)
+        return accounts_svc.create_agent(_live_store(), org_id, user["id"], name, preset)
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
 
 @app.get("/api/agents")
 def api_list_agents(request: Request) -> list[dict]:
-    user = _req_user(request)
-    return accounts_svc.list_agents(_live_store(), user["id"])
+    _user, org_id = _req_org(request, "auditor")
+    return accounts_svc.list_agents(_live_store(), org_id)
 
 
 @app.delete("/api/agents/{agent_id}")
 def api_delete_agent(request: Request, agent_id: str) -> dict:
-    user = _req_user(request)
-    if not accounts_svc.delete_agent(_live_store(), user["id"], agent_id):
+    _user, org_id = _req_org(request, "member")
+    if not accounts_svc.delete_agent(_live_store(), org_id, agent_id):
         raise HTTPException(status_code=404, detail="no such agent")
     return {"deleted": agent_id}
 
 
 @app.post("/api/agents/{agent_id}/kill")
 def api_kill_agent(request: Request, agent_id: str) -> dict:
-    user = _req_user(request)
-    if accounts_svc.get_agent(_live_store(), user["id"], agent_id) is None:
+    _user, org_id = _req_org(request, "member")
+    if accounts_svc.get_agent(_live_store(), org_id, agent_id) is None:
         raise HTTPException(status_code=404, detail="no such agent")
     live_svc.set_killed(_live_store(), agent_id, True)  # no-op until it reports
     return {"agent_id": agent_id, "killed": True}
@@ -329,8 +415,8 @@ def api_kill_agent(request: Request, agent_id: str) -> dict:
 
 @app.post("/api/agents/{agent_id}/restore")
 def api_restore_agent(request: Request, agent_id: str) -> dict:
-    user = _req_user(request)
-    if accounts_svc.get_agent(_live_store(), user["id"], agent_id) is None:
+    _user, org_id = _req_org(request, "member")
+    if accounts_svc.get_agent(_live_store(), org_id, agent_id) is None:
         raise HTTPException(status_code=404, detail="no such agent")
     live_svc.set_killed(_live_store(), agent_id, False)
     return {"agent_id": agent_id, "killed": False}
@@ -338,13 +424,13 @@ def api_restore_agent(request: Request, agent_id: str) -> dict:
 
 @app.get("/api/agents/{agent_id}/connect")
 def api_agent_connect(request: Request, agent_id: str) -> dict:
-    """Everything needed to put EIDOLON in front of this user's agent —
-    paste-and-go: the yaml carries the minted principal key, the preset's
-    authority, day-one tool policies, and the reporting credential."""
+    """Everything needed to put EIDOLON in front of your agent — paste-and-go:
+    the yaml carries the minted principal key, the preset's authority, day-one
+    tool policies, and the reporting credential. Member+ (exposes the key)."""
     import yaml as _yaml
 
-    user = _req_user(request)
-    agent = accounts_svc.get_agent(_live_store(), user["id"], agent_id)
+    _user, org_id = _req_org(request, "member")
+    agent = accounts_svc.get_agent(_live_store(), org_id, agent_id)
     if agent is None:
         raise HTTPException(status_code=404, detail="no such agent")
     keypair = accounts_svc.agent_keypair(_live_store(), agent_id)
@@ -442,8 +528,8 @@ def api_certify_agent(request: Request, agent_id: str) -> dict:
     """Run the VERSUS attack library at this agent's authority; issue a cert."""
     from eidolon.api import certify
 
-    user = _req_user(request)
-    agent = accounts_svc.get_agent(_live_store(), user["id"], agent_id)
+    user, org_id = _req_org(request, "member")
+    agent = accounts_svc.get_agent(_live_store(), org_id, agent_id)
     if agent is None:
         raise HTTPException(status_code=404, detail="no such agent")
     return certify.run_certification(
@@ -492,21 +578,22 @@ def certificate_page(cert_id: str) -> str:
 
 @app.get("/api/feed/recent")
 def api_feed_recent(request: Request, limit: int = 50) -> list[dict]:
-    user = _req_user(request)
-    owned = accounts_svc.owned_gateway_ids(_live_store(), user["id"])
+    _user, org_id = _req_org(request, "auditor")
+    owned = accounts_svc.owned_gateway_ids(_live_store(), org_id)
     events = live_svc.recent_events(_live_store(), limit=500)
     return [e for e in events if e["gateway_id"] in owned][-limit:]
 
 
 @app.get("/api/feed")
 async def api_feed(request: Request):
-    """SSE stream filtered to the signed-in user's agents."""
+    """SSE stream filtered to the active org's agents."""
     from fastapi.responses import StreamingResponse
 
     user = current_user(request)
     if user is None:
         raise HTTPException(status_code=401, detail="sign in required")
-    owned = accounts_svc.owned_gateway_ids(_live_store(), user["id"])
+    org_id, _role = _active_org(request, user)
+    owned = accounts_svc.owned_gateway_ids(_live_store(), org_id)
 
     async def stream():
         sid, queue, backlog = _live_hub.subscribe()

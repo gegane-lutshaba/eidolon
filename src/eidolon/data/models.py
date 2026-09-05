@@ -145,17 +145,52 @@ class UserSessionRow(Base):
     expires_at: Mapped[_dt.datetime] = mapped_column(DateTime(timezone=True))
 
 
+class OrgRow(Base):
+    """A team. Every user gets a personal org on signup; agents belong to an org."""
+
+    __tablename__ = "orgs"
+
+    id: Mapped[str] = mapped_column(String, primary_key=True)  # "org-<rand>"
+    name: Mapped[str] = mapped_column(String, default="")
+    personal: Mapped[bool] = mapped_column(default=False)  # the owner's auto-created team
+    created_at: Mapped[_dt.datetime] = mapped_column(DateTime(timezone=True), default=_utcnow)
+
+
+class OrgMemberRow(Base):
+    """Membership + role. Roles rank auditor < member < admin < owner."""
+
+    __tablename__ = "org_members"
+
+    org_id: Mapped[str] = mapped_column(String, primary_key=True)
+    user_id: Mapped[str] = mapped_column(String, primary_key=True, index=True)
+    role: Mapped[str] = mapped_column(String, default="member")
+    created_at: Mapped[_dt.datetime] = mapped_column(DateTime(timezone=True), default=_utcnow)
+
+
+class OrgInviteRow(Base):
+    """A one-shot-ish invite code granting a role in an org."""
+
+    __tablename__ = "org_invites"
+
+    code: Mapped[str] = mapped_column(String, primary_key=True)
+    org_id: Mapped[str] = mapped_column(String, index=True)
+    role: Mapped[str] = mapped_column(String, default="member")
+    created_at: Mapped[_dt.datetime] = mapped_column(DateTime(timezone=True), default=_utcnow)
+
+
 class AgentRow(Base):
-    """A user's registered agent: its gateway identity + reporting credential.
+    """A registered agent: its gateway identity + reporting credential.
 
     The agent's ``id`` doubles as the ``gateway_id`` its gateway reports under,
-    so ownership of gateways/events resolves through this table.
+    so ownership of gateways/events resolves through this table. Owned by an
+    ``org``; ``user_id`` records the creator.
     """
 
     __tablename__ = "agents"
 
     id: Mapped[str] = mapped_column(String, primary_key=True)  # "agt-<rand>"
-    user_id: Mapped[str] = mapped_column(String, index=True)
+    user_id: Mapped[str] = mapped_column(String, index=True)  # creator
+    org_id: Mapped[str | None] = mapped_column(String, index=True, nullable=True)
     name: Mapped[str] = mapped_column(String)
     preset: Mapped[str] = mapped_column(String, default="reader")  # authority preset
     gateway_key: Mapped[str] = mapped_column(String, unique=True, index=True)

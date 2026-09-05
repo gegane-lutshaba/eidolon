@@ -128,6 +128,118 @@ def _as_utc(dt: _dt.datetime | None) -> _dt.datetime | None:
     return dt if dt.tzinfo else dt.replace(tzinfo=_dt.UTC)
 
 
+# -- orgs, membership, roles ---------------------------------------------
+ORG_RANK = {"auditor": 1, "member": 2, "admin": 3, "owner": 4}
+
+
+def has_org_role(role: str | None, minimum: str) -> bool:
+    return role is not None and ORG_RANK.get(role, 0) >= ORG_RANK[minimum]
+
+
+def _create_org(s, name: str, personal: bool = False):
+    from eidolon.data.models import OrgRow
+
+    org = OrgRow(id=f"org-{secrets.token_urlsafe(8)}", name=name[:80] or "team",
+                 personal=personal)
+    s.add(org)
+    return org
+
+
+def _add_member(s, org_id: str, user_id: str, role: str) -> None:
+    from eidolon.data.models import OrgMemberRow
+
+    if s.get(OrgMemberRow, (org_id, user_id)) is None:
+        s.add(OrgMemberRow(org_id=org_id, user_id=user_id, role=role))
+
+
+def ensure_personal_org(sf, user_id: str, email: str = "") -> str:
+    """Return the user's personal org id, creating it (as owner) if missing.
+    Also backfills any of the user's org-less agents into that org — the lazy
+    migration path for agents created before teams existed."""
+    from eidolon.data.models import AgentRow, OrgMemberRow, OrgRow
+
+    with sf() as s:
+        personal = (
+            s.query(OrgRow).join(OrgMemberRow, OrgMemberRow.org_id == OrgRow.id)
+            .filter(OrgMemberRow.user_id == user_id, OrgRow.personal.is_(True)).first()
+        )
+        if personal is None:
+            handle = (email.split("@")[0] if email else "my") or "my"
+            personal = _create_org(s, f"{handle}'s team", personal=True)
+            s.flush()
+            _add_member(s, personal.id, user_id, "owner")
+        # backfill org-less agents this user created
+        s.query(AgentRow).filter(AgentRow.user_id == user_id,
+                                 AgentRow.org_id.is_(None)).update({"org_id": personal.id})
+        s.commit()
+        return personal.id
+
+
+def orgs_for_user(sf, user_id: str) -> list[dict]:
+    from eidolon.data.models import OrgMemberRow, OrgRow
+
+    with sf() as s:
+        rows = (
+            s.query(OrgRow, OrgMemberRow.role)
+            .join(OrgMemberRow, OrgMemberRow.org_id == OrgRow.id)
+            .filter(OrgMemberRow.user_id == user_id)
+            .order_by(OrgRow.personal.desc(), OrgRow.created_at.asc()).all()
+        )
+    return [{"id": o.id, "name": o.name, "personal": o.personal, "role": role}
+            for o, role in rows]
+
+
+def role_in_org(sf, org_id: str, user_id: str) -> str | None:
+    from eidolon.data.models import OrgMemberRow
+
+    with sf() as s:
+        m = s.get(OrgMemberRow, (org_id, user_id))
+    return m.role if m else None
+
+
+def create_org(sf, user_id: str, name: str) -> dict:
+    with sf() as s:
+        org = _create_org(s, name)
+        s.flush()
+        _add_member(s, org.id, user_id, "owner")
+        s.commit()
+        return {"id": org.id, "name": org.name, "personal": False, "role": "owner"}
+
+
+def list_members(sf, org_id: str) -> list[dict]:
+    from eidolon.data.models import OrgMemberRow, UserRow
+
+    with sf() as s:
+        rows = (s.query(OrgMemberRow, UserRow.email)
+                .join(UserRow, UserRow.id == OrgMemberRow.user_id)
+                .filter(OrgMemberRow.org_id == org_id).all())
+    return [{"user_id": m.user_id, "email": email, "role": m.role} for m, email in rows]
+
+
+def create_invite(sf, org_id: str, role: str) -> str:
+    from eidolon.data.models import OrgInviteRow
+
+    role = role if role in ORG_RANK else "member"
+    code = f"inv_{secrets.token_urlsafe(9)}"
+    with sf() as s:
+        s.add(OrgInviteRow(code=code, org_id=org_id, role=role))
+        s.commit()
+    return code
+
+
+def redeem_invite(sf, user_id: str, code: str) -> dict:
+    from eidolon.data.models import OrgInviteRow, OrgRow
+
+    with sf() as s:
+        inv = s.get(OrgInviteRow, code.strip())
+        if inv is None:
+            raise ValueError("invalid or expired invite code")
+        org = s.get(OrgRow, inv.org_id)
+        _add_member(s, inv.org_id, user_id, inv.role)
+        s.commit()
+        return {"id": org.id, "name": org.name, "role": inv.role}
+
+
 # -- users + sessions ----------------------------------------------------
 def create_user(sf, email: str, password: str) -> dict:
     from eidolon.data.models import UserRow
@@ -141,6 +253,11 @@ def create_user(sf, email: str, password: str) -> dict:
         user = UserRow(id=f"usr-{secrets.token_urlsafe(9)}", email=email,
                        password_hash=hash_password(password))
         s.add(user)
+        # personal org, owner membership
+        handle = email.split("@")[0] or "my"
+        org = _create_org(s, f"{handle}'s team", personal=True)
+        s.flush()
+        _add_member(s, org.id, user.id, "owner")
         s.commit()
         return {"id": user.id, "email": user.email}
 
@@ -195,8 +312,8 @@ def user_for_session(sf, token: str | None) -> dict | None:
     return {"id": user.id, "email": user.email} if user else None
 
 
-# -- agents ---------------------------------------------------------------
-def create_agent(sf, user_id: str, name: str, preset: str) -> dict:
+# -- agents (org-scoped) --------------------------------------------------
+def create_agent(sf, org_id: str, user_id: str, name: str, preset: str) -> dict:
     from eidolon.common import crypto
     from eidolon.data.models import AgentKeyRow, AgentRow
 
@@ -210,7 +327,7 @@ def create_agent(sf, user_id: str, name: str, preset: str) -> dict:
             f"unknown preset {preset!r} (use '<kind>/<authority>' from the gallery, "
             f"kinds={sorted(GALLERY)}, authorities={sorted(PRESETS)})")
     name = name.strip()[:60] or "unnamed-agent"
-    agent = AgentRow(id=f"agt-{secrets.token_urlsafe(8)}", user_id=user_id,
+    agent = AgentRow(id=f"agt-{secrets.token_urlsafe(8)}", user_id=user_id, org_id=org_id,
                      name=name, preset=preset,
                      gateway_key=f"egk_{secrets.token_urlsafe(24)}")
     # Mint the agent's principal identity now so connect is paste-and-go
@@ -232,13 +349,13 @@ def agent_keypair(sf, agent_id: str) -> dict | None:
     return {"public": row.public_hex, "signing": row.signing_hex} if row else None
 
 
-def list_agents(sf, user_id: str) -> list[dict]:
+def list_agents(sf, org_id: str) -> list[dict]:
     from sqlalchemy import func, select
 
     from eidolon.data.models import AgentRow, GatewayEventRow, GatewayRow
 
     with sf() as s:
-        agents = s.execute(select(AgentRow).where(AgentRow.user_id == user_id)
+        agents = s.execute(select(AgentRow).where(AgentRow.org_id == org_id)
                            .order_by(AgentRow.created_at.asc())).scalars().all()
         out = []
         for a in agents:
@@ -260,33 +377,33 @@ def list_agents(sf, user_id: str) -> list[dict]:
         return out
 
 
-def get_agent(sf, user_id: str, agent_id: str) -> dict | None:
+def get_agent(sf, org_id: str, agent_id: str) -> dict | None:
     from eidolon.data.models import AgentRow
 
     with sf() as s:
         a = s.get(AgentRow, agent_id)
-    return _agent_dict(a) if a and a.user_id == user_id else None
+    return _agent_dict(a) if a and a.org_id == org_id else None
 
 
-def delete_agent(sf, user_id: str, agent_id: str) -> bool:
+def delete_agent(sf, org_id: str, agent_id: str) -> bool:
     from eidolon.data.models import AgentRow
 
     with sf() as s:
         a = s.get(AgentRow, agent_id)
-        if a is None or a.user_id != user_id:
+        if a is None or a.org_id != org_id:
             return False
         s.delete(a)  # key revoked; historical gateway/events remain for audit
         s.commit()
     return True
 
 
-def owned_gateway_ids(sf, user_id: str) -> set[str]:
+def owned_gateway_ids(sf, org_id: str) -> set[str]:
     from sqlalchemy import select
 
     from eidolon.data.models import AgentRow
 
     with sf() as s:
-        rows = s.execute(select(AgentRow.id).where(AgentRow.user_id == user_id)).all()
+        rows = s.execute(select(AgentRow.id).where(AgentRow.org_id == org_id)).all()
     return {r[0] for r in rows}
 
 
