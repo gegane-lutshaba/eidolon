@@ -1,21 +1,40 @@
-# EIDOLON
+<h1 align="center">EIDOLON</h1>
+<p align="center"><b>Your agent. Seen. Bounded. Revocable.</b><br/>
+The cryptographic authority layer for AI agents — watch every tool call live,
+delegate exactly the authority you choose, and kill it mid-session.</p>
 
-**Sovereign delegated agency for faithful digital twins.** Built on
-[SAGE](https://github.com/l33tdawg/sage). Domain-agnostic core. Beachhead
-profile: `general-continuity`.
+<p align="center">
+  <a href="https://github.com/gegane-lutshaba/eidolon/actions"><img alt="CI" src="https://github.com/gegane-lutshaba/eidolon/actions/workflows/ci.yml/badge.svg"></a>
+  <img alt="tests" src="https://img.shields.io/badge/tests-259%20passing-39d98a">
+  <img alt="license" src="https://img.shields.io/badge/license-Apache--2.0-8b7bff">
+  <img alt="python" src="https://img.shields.io/badge/python-3.12%2B-4fc7ff">
+  <a href="https://github.com/l33tdawg/sage"><img alt="built on SAGE" src="https://img.shields.io/badge/built%20on-SAGE-f2b84b"></a>
+</p>
 
-EIDOLON lets a person delegate a cryptographically bounded, revocable, fully
-attributable slice of their professional authority to a digital twin that
-decides the way they would. It owns the **identity-fidelity and
-delegated-authority** layer on top of SAGE's consensus-validated memory
-substrate. See [`docs/EIDOLON_PRD_v1.md`](docs/EIDOLON_PRD_v1.md) for the full
-contract.
+<p align="center">
+  🕹️ <b><a href="https://eidolon.onyxcreator.com/versus">Try VERSUS live</a></b> —
+  watch a famous agent get wrecked by a real attack, then the same attack hit the gate ·
+  <a href="https://eidolon.onyxcreator.com/challenge">break the gate</a> ·
+  <a href="https://eidolon.onyxcreator.com/paper">white paper</a>
+</p>
+
+---
+
+AI agents act with your authority and none of your restraint. **EIDOLON** is the
+layer in between: a signed, attenuable, revocable delegation credential the agent
+must satisfy on **every** tool call — checked independently of the model (so it
+can't be prompt-injected away), every action written to a tamper-evident ledger.
 
 Two invariants override everything and are property-tested in CI:
 
 1. **Default-deny** — any authority not explicitly granted is denied.
 2. **No unattested action** — no side effect runs without a successful `HORKOS`
    attestation (attest-then-act).
+
+Domain-agnostic core, beachhead profile `general-continuity`. Built on
+[SAGE](https://github.com/l33tdawg/sage). Full contract:
+[`docs/EIDOLON_PRD_v1.md`](docs/EIDOLON_PRD_v1.md) · 5-minute
+[quickstart](docs/quickstart.md).
 
 📄 **White paper:** [`docs/whitepaper.md`](docs/whitepaper.md) · **Case study
 (Hermes with/without EIDOLON):** [`docs/case-study-hermes.md`](docs/case-study-hermes.md)

@@ -82,8 +82,8 @@
           capability-based authority, attenuable delegation, tamper-evident attestation. Believes
           an agent should be trusted the way you trust a colleague: with a scope, a receipt, and a
           way to say stop. Ships fast, tests hard, argues with the gate (and loses — it's machine-checked).</div>
-        <div class="links">▸ <a href="/versus">try VERSUS</a> · ▸ <a href="https://gitlab.com/mthandazogegane/eidolon" target="_blank" rel="noopener">source</a></div>
-        <a class="pdf" href="https://gitlab.com/mthandazogegane/eidolon/-/blob/main/docs/whitepaper.pdf" target="_blank" rel="noopener">⬇ full PDF</a>
+        <div class="links">▸ <a href="/versus">try VERSUS</a> · ▸ <a href="https://github.com/gegane-lutshaba/eidolon" target="_blank" rel="noopener">source</a></div>
+        <a class="pdf" href="https://github.com/gegane-lutshaba/eidolon/blob/main/docs/whitepaper.pdf" target="_blank" rel="noopener">⬇ full PDF</a>
       </div>
     </div>
 
@@ -114,7 +114,7 @@
     document.querySelectorAll(".md img").forEach(img => {
       const s = img.getAttribute("src") || "";
       if (s.startsWith("visuals/") || s.startsWith("./visuals/"))
-        img.src = "https://gitlab.com/mthandazogegane/eidolon/-/raw/main/docs/" + s.replace("./","");
+        img.src = "https://github.com/gegane-lutshaba/eidolon/raw/main/docs/" + s.replace("./","");
     });
   } catch { document.getElementById("md").textContent = "White paper unavailable — see the PDF."; }
 })();

@@ -6,7 +6,7 @@ machine (or your VPS).
 ## 1 · Try to break it (2 minutes, nothing to configure)
 
 ```bash
-git clone https://gitlab.com/mthandazogegane/eidolon && cd eidolon
+git clone https://github.com/gegane-lutshaba/eidolon && cd eidolon
 uv sync
 make challenge        # → open http://localhost:8000/challenge
 ```

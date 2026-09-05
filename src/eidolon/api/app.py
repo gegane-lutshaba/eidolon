@@ -377,7 +377,7 @@ def api_agent_connect(request: Request, agent_id: str) -> dict:
     # DOOR 2 — AGENT SETUP: a file the user hands their agent; it does the rest.
     setup_md = _agent_setup_md(agent, gateway_yaml, base)
     # DOOR 3 — SELF-HOSTED: uvx one-liners (no clone needed).
-    repo = "git+https://gitlab.com/mthandazogegane/eidolon"
+    repo = "git+https://github.com/gegane-lutshaba/eidolon"
     selfhost = {
         "gateway_cmd": (
             f"uvx --from {repo} eidolon-gateway --config gateway.yaml \\\n"
@@ -398,7 +398,7 @@ def api_agent_connect(request: Request, agent_id: str) -> dict:
 def _agent_setup_md(agent: dict, gateway_yaml: str, base: str) -> str:
     """The file a user hands to Claude Code / codex / pi: the agent sets up
     its own governance. Credentials are baked in — nothing to look up."""
-    repo = "git+https://gitlab.com/mthandazogegane/eidolon"
+    repo = "git+https://github.com/gegane-lutshaba/eidolon"
     return f"""# EIDOLON setup — do this now
 
 You are being placed under EIDOLON governance (your operator chose this).

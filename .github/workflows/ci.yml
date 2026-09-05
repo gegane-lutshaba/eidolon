@@ -1,0 +1,23 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+      - name: Sync (with mcp + biscuit extras)
+        run: uv sync --group dev --extra mcp --extra biscuit
+      - name: Lint
+        run: uv run ruff check src tests
+      - name: Tests (fast lane)
+        run: uv run pytest -m "not integration" -q
