@@ -12,12 +12,12 @@
     --green:#39d98a; --red:#ff5c5c; --cyan:#4fc7ff; --accent:#8b7bff; --pixel:"Press Start 2P", monospace; }
   * { box-sizing:border-box; }
   body { margin:0; background:var(--bg); color:var(--ink); min-height:100vh;
-    display:flex; align-items:center; justify-content:center;
+    display:flex; align-items:center; justify-content:center; padding:20px;
     font:14px/1.6 ui-monospace,Menlo,Consolas,monospace; }
   body::before { content:""; position:fixed; inset:0; pointer-events:none; z-index:9;
     background:repeating-linear-gradient(0deg, rgba(0,0,0,.16) 0 1px, transparent 1px 3px); }
   a { color:var(--cyan); text-decoration:none; }
-  .card { background:var(--panel); border:1px solid var(--line); border-radius:12px; padding:30px 28px; width:360px; }
+  .card { background:var(--panel); border:1px solid var(--line); border-radius:12px; padding:30px 28px; width:100%; max-width:360px; }
   .logo { font-family:var(--pixel); font-size:12px; color:var(--accent); margin-bottom:14px; }
   label { display:block; color:var(--dim); font-size:11px; margin:12px 0 6px; text-transform:uppercase; letter-spacing:.5px; }
   input { width:100%; background:var(--bg); border:1px solid var(--line); color:var(--ink);
