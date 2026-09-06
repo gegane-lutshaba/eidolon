@@ -88,8 +88,14 @@ def test_versus_endpoints(client) -> None:
     assert body["with_eidolon"]["verdict"] in ("FLAWLESS", "GUARDED")
 
 
-def test_paper_page_and_content_use_handle(client) -> None:
-    assert "CREDITS" in client.get("/paper").text
+def test_paper_unlinked_and_credits_on_landing(client) -> None:
+    # The paper is being rewritten: /paper is unlinked and sends visitors home.
+    r = client.get("/paper", follow_redirects=False)
+    assert r.status_code == 307
+    assert r.headers["location"] == "/"
+    # CREDITS now live on the landing page, not the paper.
+    assert "CREDITS" in client.get("/").text
+    # /paper/content stays intact (handle-rewritten) for the forthcoming rewrite.
     md = client.get("/paper/content").text
     assert "Gegane" in md
     assert "Mthandazo Ndhlovu" not in md  # legal name stays on the PDF only

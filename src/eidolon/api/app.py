@@ -761,10 +761,14 @@ def portal_page() -> str:
     return (_STATIC / "portal.html").read_text(encoding="utf-8")
 
 
-@app.get("/paper", response_class=HTMLResponse)
-def paper_page() -> str:
-    """The white paper as an in-theme arcade page (rendered client-side)."""
-    return (_STATIC / "paper.html").read_text(encoding="utf-8")
+@app.get("/paper")
+def paper_page() -> Response:
+    """The white paper is being rewritten; unlink it from the site for now.
+
+    The paper.html page and /paper/content endpoint are kept intact for the
+    forthcoming rewrite — this route just sends visitors home meanwhile.
+    """
+    return RedirectResponse("/", status_code=307)
 
 
 @app.get("/og.png")

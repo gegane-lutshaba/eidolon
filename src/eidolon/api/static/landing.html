@@ -111,6 +111,17 @@
     color:var(--dim); font-size:12.5px; display:flex; justify-content:space-between;
     flex-wrap:wrap; gap:10px; }
   .tiny { font-size:11px; color:var(--dim); }
+  /* credits */
+  .ctag { color:var(--dim); font-size:12.5px; margin:-8px 0 18px; }
+  .char { display:flex; gap:16px; align-items:flex-start; background:var(--panel);
+    border:1px solid var(--line); border-radius:12px; padding:16px; margin:12px 0; }
+  .char canvas { image-rendering:pixelated; width:96px; height:96px; flex-shrink:0;
+    background:#05070c; border:1px solid var(--line); border-radius:8px; }
+  .char .role { font-family:var(--pixel); font-size:9px; }
+  .char .nm { font-family:var(--pixel); font-size:12px; margin:8px 0; }
+  .char .bio { color:#c3cddb; font-size:13px; }
+  .char .links { margin-top:8px; font-size:12.5px; }
+  .g1 .role { color:var(--accent); } .g2 .role { color:var(--amber); }
 </style>
 </head>
 <body>
@@ -119,7 +130,6 @@
     <span class="logo" style="display:inline-flex;align-items:center;gap:8px"><img src="/favicon.svg" width="20" height="20" alt=""/>EIDOLON</span>
     <span class="links">
       <a href="/versus">versus</a>
-      <a href="/paper">paper</a>
       <a href="/certified">certified</a>
       <a href="/contact">co-op</a>
       <a href="https://github.com/gegane-lutshaba/eidolon" target="_blank" rel="noopener">source</a>
@@ -204,10 +214,35 @@
     <span>hash-chained <b>attestation ledger</b></span>
   </div>
 
+  <section class="credits">
+    <h2>★ CREDITS ★</h2>
+    <div class="ctag">the two-player co-op behind EIDOLON</div>
+    <div class="char g1">
+      <canvas id="cGegane" width="16" height="16"></canvas>
+      <div>
+        <div class="role">PLAYER 1 — CREATOR</div>
+        <div class="nm">GEGANE</div>
+        <div class="bio">Built EIDOLON — the cryptographic authority layer that lets you see,
+          bound, and revoke an AI agent mid-session. Default-deny, attest-then-act, on a leash you hold.</div>
+        <div class="links"><a href="/versus">▶ play VERSUS</a> ·
+          <a href="https://github.com/gegane-lutshaba/eidolon" target="_blank" rel="noopener">source</a></div>
+      </div>
+    </div>
+    <div class="char g2">
+      <canvas id="cDawg" width="16" height="16"></canvas>
+      <div>
+        <div class="role">PLAYER 2 — POWERED BY</div>
+        <div class="nm">L33TDAWG · SAGE</div>
+        <div class="bio">SAGE is the BFT-consensus substrate EIDOLON's attestation ledger rides on —
+          hash-chained, tamper-evident memory for agents. The gate stands on it.</div>
+        <div class="links"><a href="https://github.com/l33tdawg/sage" target="_blank" rel="noopener">github.com/l33tdawg/sage</a></div>
+      </div>
+    </div>
+  </section>
+
   <footer>
     <span>EIDOLON — provable delegated agency · built on <a href="https://github.com/l33tdawg/sage" target="_blank" rel="noopener">SAGE</a></span>
     <span><a href="/versus">versus</a> ·
-      <a href="/paper">white paper</a> ·
       <a href="/contact">collaborate</a> · <a href="/login">operator</a></span>
   </footer>
 </div>
@@ -221,6 +256,54 @@
     document.getElementById("cAgents").textContent = fmt(s.agents_enrolled);
   } catch {}
 })();
+
+// ── CREDITS pixel-art ─────────────────────────────────────────────
+function paint(id, rows, pal) {
+  const cv = document.getElementById(id), x = cv.getContext("2d");
+  rows.forEach((row, y) => [...row].forEach((ch, cx) => {
+    if (pal[ch]) { x.fillStyle = pal[ch]; x.fillRect(cx, y, 1, 1); }
+  }));
+}
+// GEGANE — hooded coder with cyan glasses
+paint("cGegane", [
+  "................",
+  "....PPPPPP......",
+  "...PPPPPPPP.....",
+  "..PPSSSSSSPP....",
+  "..PSssssssSP....",
+  "..PSsCCsCCsP....",
+  "..PSsCCsCCsP....",
+  "..PSssssssSP....",
+  "..PSssmmssSP....",
+  "..PPSssssSPP....",
+  "...PPPPPPPP.....",
+  "....AAAAAA......",
+  "...AAAAAAAA.....",
+  "..AA.AAAA.AA....",
+  "..A..AAAA..A....",
+  ".....AAAA......."
+], { P:"#5c4fd1", S:"#8b7bff", s:"#e8c9a0", C:"#4fc7ff", m:"#7a3b3b", A:"#2a2140" });
+// L33TDAWG — dog with green shades + tongue
+paint("cDawg", [
+  "................",
+  "..DD......DD....",
+  ".DDDD....DDDD...",
+  ".DDDDDDDDDDDD...",
+  "DDbbbbbbbbbbDD..",
+  "DbbGGGGGGGGbbD..",
+  "Dbb.GG..GG.bbD..",
+  "DbbbbbbbbbbbbD..",
+  ".DbbbNNNNbbbD...",
+  ".DbbbNNNNbbbD...",
+  "..DbbbNNbbbD....",
+  "...DbbTTbbD.....",
+  "....DbTTbD......",
+  ".....DTTD.......",
+  "................",
+  "................"
+], { D:"#6b4a2a", b:"#8a6234", G:"#0f2a1a", ".":"", N:"#3a2817", T:"#ff5c7a" });
+(function(){const x=document.getElementById("cDawg").getContext("2d");x.fillStyle="#39d98a";
+  x.fillRect(4,6,2,1);x.fillRect(8,6,2,1);})();
 </script>
 </body>
 </html>
