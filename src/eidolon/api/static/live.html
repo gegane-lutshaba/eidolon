@@ -34,6 +34,22 @@
   main { max-width:1180px; margin:0 auto; padding:18px 24px; display:grid;
     grid-template-columns:300px 1fr; gap:16px; }
   @media (max-width: 900px) { main { grid-template-columns:1fr; } }
+  /* Desktop: fill the viewport and scroll each column on its own, so the live
+     feed scrolls independently instead of dragging the whole page. */
+  @media (min-width: 901px) {
+    html, body { height:100%; }
+    body { display:flex; flex-direction:column; overflow:hidden; }
+    header { flex:0 0 auto; }
+    main { flex:1 1 auto; min-height:0; overflow:hidden; width:100%; }
+    main > div { min-height:0; max-height:100%; overflow-y:auto; }
+    .feedcol { display:flex; flex-direction:column; overflow:hidden; }
+    .feedcol .feedhead { flex:0 0 auto; }
+    #feed { flex:1 1 auto; min-height:0; overflow-y:auto; padding-right:4px; }
+    /* thin, in-theme scrollbars */
+    main > div::-webkit-scrollbar, #feed::-webkit-scrollbar { width:8px; }
+    main > div::-webkit-scrollbar-thumb, #feed::-webkit-scrollbar-thumb {
+      background:var(--line); border-radius:8px; }
+  }
   .panel { background:var(--panel); border:1px solid var(--line); border-radius:12px;
     padding:13px 14px; margin-bottom:14px; }
   .panel h2 { margin:0 0 9px; font-size:13.5px; color:var(--dim);
@@ -121,7 +137,7 @@
     </div>
   </div>
 
-  <div>
+  <div class="feedcol">
     <div class="feedhead">
       <h2 style="margin:0; font-size:13.5px; color:var(--dim); text-transform:uppercase; letter-spacing:.6px">Live action feed</h2>
       <label><input type="checkbox" id="denials" style="width:auto" /> ⚠ denials &amp; kills only</label>

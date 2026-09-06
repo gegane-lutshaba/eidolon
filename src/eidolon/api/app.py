@@ -532,8 +532,20 @@ def api_agent_connect(request: Request, agent_id: str) -> dict:
                      "--", "npx", "-y", "@modelcontextprotocol/server-filesystem", "."]}}},
         "http_hint": "add --http 8300 and point remote agents at http://<host>:8300/mcp",
     }
+    # DOOR 4 — HOOK: govern Claude Code's NATIVE tools (Bash/Edit/Read/…), which
+    # never flow through MCP. A PreToolUse+PostToolUse hook rules on every call.
+    raw = "https://raw.githubusercontent.com/gegane-lutshaba/eidolon/main/integrations/claude_code/eidolon_hook.py"
+    hook_cmd = (f"EIDOLON_URL={base} EIDOLON_AGENT_KEY={agent['gateway_key']} "
+                "python3 ~/.eidolon/eidolon_hook.py")
+    hook = {
+        "download_cmd": f"mkdir -p ~/.eidolon && curl -fsSL {raw} -o ~/.eidolon/eidolon_hook.py",
+        "settings_json": {"hooks": {
+            evt: [{"matcher": "*", "hooks": [{"type": "command", "command": hook_cmd}]}]
+            for evt in ("PreToolUse", "PostToolUse")}},
+        "docs": "https://github.com/gegane-lutshaba/eidolon/blob/main/integrations/claude_code/README.md",
+    }
     return {"agent": {k: v for k, v in agent.items() if k != "user_id"},
-            "gateway_yaml": gateway_yaml,
+            "gateway_yaml": gateway_yaml, "hook": hook,
             "managed": managed, "agent_setup_md": setup_md, "selfhost": selfhost}
 
 

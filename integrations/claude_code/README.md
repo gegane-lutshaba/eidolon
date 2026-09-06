@@ -32,14 +32,33 @@ The exfil rule is the point: read a secret with `Read`, then try to `curl` it to
 an external host or paste it into a `WebFetch` URL, and EIDOLON denies the
 egress — structurally, not by asking the model nicely.
 
-## Setup
+## Setup (copy-paste, ~2 min)
 
-1. **Get your agent key.** In the app, create an agent; copy its `egk_…` gateway
-   key. (Same key the managed `/mcp` endpoint uses.)
+The app generates all of this pre-filled for your agent — open the dashboard,
+click **CONNECT** on an agent, and pick the **🪝 EVERY ACTION** tab. Or do it by
+hand:
 
-2. **Point the hook at the key.** Add to `~/.claude/settings.json` (all projects)
-   or `.claude/settings.json` (one project). Replace the key and the path to
-   `eidolon_hook.py`:
+### 1. Get your agent key
+
+In the app, create an agent and copy its `egk_…` gateway key (the same key the
+managed `/mcp` endpoint uses). Everything below needs it.
+
+### 2. Install the hook script (once)
+
+```bash
+mkdir -p ~/.eidolon
+curl -fsSL https://raw.githubusercontent.com/gegane-lutshaba/eidolon/main/integrations/claude_code/eidolon_hook.py \
+  -o ~/.eidolon/eidolon_hook.py
+```
+
+(Or copy this file there yourself — it's stdlib-only, no install needed.)
+
+### 3. Wire it into Claude Code
+
+Add to **`~/.claude/settings.json`** (all projects) or **`.claude/settings.json`**
+(one project). If the file already has a `"hooks"` key, merge these in. Replace
+`egk_YOURKEY` with your key (and `EIDOLON_URL` with your on-prem host if
+self-hosting):
 
 ```json
 {
@@ -47,24 +66,40 @@ egress — structurally, not by asking the model nicely.
     "PreToolUse": [
       { "matcher": "*", "hooks": [
         { "type": "command",
-          "command": "EIDOLON_AGENT_KEY=egk_YOURKEY python3 /ABS/PATH/integrations/claude_code/eidolon_hook.py" }
+          "command": "EIDOLON_URL=https://eidolon.onyxcreator.com EIDOLON_AGENT_KEY=egk_YOURKEY python3 ~/.eidolon/eidolon_hook.py" }
       ]}
     ],
     "PostToolUse": [
       { "matcher": "*", "hooks": [
         { "type": "command",
-          "command": "EIDOLON_AGENT_KEY=egk_YOURKEY python3 /ABS/PATH/integrations/claude_code/eidolon_hook.py" }
+          "command": "EIDOLON_URL=https://eidolon.onyxcreator.com EIDOLON_AGENT_KEY=egk_YOURKEY python3 ~/.eidolon/eidolon_hook.py" }
       ]}
     ]
   }
 }
 ```
 
-   (Prefer not to inline the key? Export `EIDOLON_AGENT_KEY` in your shell
-   profile and drop it from the command.)
+The `"matcher": "*"` runs the hook on **every** tool. Prefer not to inline the
+key? Export `EIDOLON_URL` / `EIDOLON_AGENT_KEY` in your shell profile and drop
+them from the command.
 
-3. **Restart Claude Code.** From now on every tool call is governed and attested.
-   Watch it live at `EIDOLON_URL/live`.
+### 4. Restart Claude Code
+
+Hooks load at startup. From now on every tool call is governed and attested.
+
+### 5. Verify
+
+Open the live feed (`EIDOLON_URL/live`) and, in Claude Code, ask it to read a
+file — a green **read-code** row should appear within a second. Then ask it to
+run `rm -rf` something: Claude Code should prompt you (EIDOLON returned **ask**).
+Quick manual check without the agent:
+
+```bash
+curl -s -X POST https://eidolon.onyxcreator.com/gate/evaluate \
+  -H "Authorization: Bearer egk_YOURKEY" -H 'content-type: application/json' \
+  -d '{"tool":"Bash","tool_input":{"command":"rm -rf /"}}'
+# -> {"decision":"ask", ... "action_class":"destructive-command"}
+```
 
 ## Options (environment)
 

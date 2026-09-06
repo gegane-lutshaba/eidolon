@@ -196,7 +196,8 @@
         config — a signed, revocable credential is minted underneath.</p></div>
       <div class="lvl"><div class="t">LEVEL 2 · WRAP</div>
         <p>Point your agent at the gateway instead of its raw tools. Claude Code, Hermes,
-        Cursor, anything MCP — zero agent changes.</p>
+        Cursor, anything MCP — zero agent changes. Claude Code can also govern its
+        <b>built-in Bash/Edit/Read</b> via a drop-in hook — every action, not just MCP.</p>
         <code>python -m eidolon.gateway --config gateway.yaml \
   -- npx -y @modelcontextprotocol/server-filesystem .</code></div>
       <div class="lvl"><div class="t">LEVEL 3 · WATCH</div>

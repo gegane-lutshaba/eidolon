@@ -84,6 +84,14 @@ claude mcp add --transport http eidolon https://eidolon.onyxcreator.com/mcp \
   --header "Authorization: Bearer <your agent key>"
 ```
 
+**Govern Claude Code's *native* tools** (Bash / Edit / Write / Read) — which
+never flow through MCP — with a drop-in hook. Install it once and wire a
+`PreToolUse` + `PostToolUse` hook in `~/.claude/settings.json`; every built-in
+tool call is then ruled on (allow · ask · deny), attested, and streamed to the
+same feed. Full copy-paste steps:
+[`integrations/claude_code/`](integrations/claude_code/). The dashboard's
+**CONNECT → 🪝 EVERY ACTION** tab generates it pre-filled.
+
 **Self-host the gateway** in front of your own tools — no clone, just
 [uv](https://docs.astral.sh/uv/):
 
