@@ -1145,6 +1145,64 @@ def ingest_event(request: Request, event: live_svc.GatewayEvent = Body(...)) -> 
     return {"ok": True, "killed": killed}
 
 
+# -- coding-agent governance: native-tool hook (Claude Code / Cursor / Codex) --
+_coding_cache = None
+
+
+def _coding_engines():
+    global _coding_cache
+    if _coding_cache is None:
+        from eidolon.api.coding_agent import CodingEngineCache
+
+        _coding_cache = CodingEngineCache(_live_store, _live_hub)
+    return _coding_cache
+
+
+def _agent_from_bearer(request: Request) -> dict:
+    header = request.headers.get("authorization", "")
+    key = header[7:].strip() if header[:7].lower() == "bearer " else None
+    agent = accounts_svc.agent_for_gateway_key(_live_store(), key)
+    if agent is None:
+        raise HTTPException(status_code=401, detail="agent gateway key required",
+                            headers={"WWW-Authenticate": "Bearer"})
+    return agent
+
+
+@app.post("/gate/evaluate")
+def gate_evaluate(request: Request, tool: str = Body(...),
+                  tool_input: dict = Body(default={}),
+                  cwd: str | None = Body(default=None)) -> dict:
+    """PreToolUse: rule on a coding agent's NATIVE tool call (Bash/Edit/Read/…)
+    that never flows through MCP. Runs KAIROS over the agent's coding engine and
+    returns a permission decision (allow|ask|deny) plus the attested verdict.
+    The call is recorded on the same live feed + ledger as the MCP gateway and
+    respects the same operator kill switch."""
+    from eidolon.api.coding_agent import classify, decision_for
+
+    agent = _agent_from_bearer(request)
+    policy_tool, args = classify(tool, tool_input)
+    result = _coding_engines().for_agent(agent).decide(policy_tool, args)
+    return {
+        "decision": decision_for(result),
+        "reason": result.message or result.rationale or "",
+        "level": result.level, "action_class": result.action_class,
+        "tool": policy_tool, "attestation": result.attestation_hash,
+    }
+
+
+@app.post("/gate/observe")
+def gate_observe(request: Request, tool: str = Body(...),
+                 output: str = Body(default="")) -> dict:
+    """PostToolUse: feed a tool's output into the taint tracker so a later egress
+    (shell/web) carrying a sensitive value it revealed is caught as exfiltration."""
+    from eidolon.api.coding_agent import classify
+
+    agent = _agent_from_bearer(request)
+    policy_tool, _ = classify(tool, None)
+    _coding_engines().for_agent(agent).observe_result(policy_tool, output)
+    return {"ok": True}
+
+
 @app.get("/live/events")
 async def live_events(request: Request):
     """SSE stream for the mission-control feed (recent backlog, then live)."""

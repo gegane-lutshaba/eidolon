@@ -120,6 +120,8 @@ def required_role(method: str, path: str) -> str | None:
         return None
     if path == "/mcp" or path.startswith("/mcp/"):
         return None  # hosted MCP endpoint authenticates itself (agent gateway key)
+    if path.startswith("/gate/"):
+        return None  # coding-agent hook endpoints self-authenticate (agent key)
     if path.startswith(_USER_PREFIX) or path == "/auth/change-password":
         return "user"
     if path.startswith("/certified"):

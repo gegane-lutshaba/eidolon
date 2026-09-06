@@ -1,0 +1,86 @@
+# EIDOLON profile for coding agents (Claude Code / Cursor / Codex).
+#
+# Fronts a developer agent's *native* tools (read/edit/shell/web) via a
+# PreToolUse hook, not just its MCP servers. Normal dev work flows green within
+# scope; destructive commands escalate; any sensitive value read that then
+# heads for an egress call (shell/web) is denied as data-exfiltration.
+domain_profile:
+  id: coding-agent
+  version: 1.0.0
+  name: Coding agent governance
+
+  capability_taxonomy:
+    - class: read-code
+      description: Read files, search the tree, inspect the workspace.
+      reversibility: reversible
+      risk_tier: 0
+      default_autonomy_ceiling: autonomous
+    - class: manage-tasks
+      description: Bookkeeping the agent does to itself (todo lists, plans).
+      reversibility: reversible
+      risk_tier: 0
+      default_autonomy_ceiling: autonomous
+    - class: edit-code
+      description: Create or modify files in the workspace (git-recoverable).
+      reversibility: recoverable
+      risk_tier: 1
+      default_autonomy_ceiling: autonomous
+    - class: run-command
+      description: Run a shell command (build, test, lint, git status…).
+      reversibility: recoverable
+      risk_tier: 2
+      default_autonomy_ceiling: notify
+    - class: web-egress
+      description: Fetch a URL or search the web — data can leave with the call.
+      reversibility: recoverable
+      risk_tier: 2
+      default_autonomy_ceiling: notify
+    - class: destructive-command
+      description: Irreversible or dangerous shell (rm -rf, force-push, pipe-to-shell…).
+      reversibility: irreversible
+      risk_tier: 3
+      default_autonomy_ceiling: draft
+
+  mandate_schema:
+    scope_selectors: [project, path, host]
+    exclusion_types:
+      # A governed dev agent must never exfiltrate a value it read. Derived
+      # dynamically when a sensitive read output flows into a shell/web call.
+      - data-exfiltration
+      # Data collected for one purpose may not be used for another.
+      - purpose-limitation
+      # Static boundaries an operator can pin onto a mandate.
+      - secret-egress
+      - external-network
+    escalation_required: [destructive-command]
+    budget_dimensions: [egress_per_window]
+
+  escalation_templates:
+    - trigger: low-confidence
+      message_template: "Not sure this {situation} is in scope for the agent — flagging for you."
+      urgency: normal
+    - trigger: out-of-scope
+      message_template: "This touches {boundary}, outside the agent's mandate. Escalating."
+      urgency: high
+
+  fidelity_rubric:
+    decision_points: [read-code, edit-code, run-command]
+    agreement_metric: "scope+stop+escalate exact match"
+    # Kept at/below the default confidence floor: for a dev agent the hard
+    # controls are authority (scope), exclusions (exfil), and ceilings
+    # (destructive escalates) — not per-call "would they do this" fidelity.
+    calibration_target: 0.6
+
+  tool_bindings:
+    - class: read-code
+      mcp_tool_ref: "workspace.read"
+    - class: edit-code
+      mcp_tool_ref: "workspace.edit"
+    - class: run-command
+      mcp_tool_ref: "shell.run"
+    - class: web-egress
+      mcp_tool_ref: "web.fetch"
+    - class: destructive-command
+      mcp_tool_ref: "shell.destructive"
+    - class: manage-tasks
+      mcp_tool_ref: "agent.todo"
