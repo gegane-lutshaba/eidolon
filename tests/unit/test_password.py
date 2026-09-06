@@ -1,5 +1,6 @@
-"""Password self-service: change-password (signed in), forgot -> reset-by-token,
-and the operator admin reset-link tool. No email needed for the token flow.
+"""Password self-service: change-password while signed in (proving the current
+password). Emailed password reset (forgot/reset-by-token, admin reset-link) was
+removed — it cannot be self-service without SMTP delivery.
 """
 
 from __future__ import annotations
@@ -60,33 +61,13 @@ def test_change_password_requires_auth(client) -> None:
                        json={"current_password": "x", "new_password": "yyyyyyyy"}).status_code == 401
 
 
-def test_forgot_does_not_leak_and_admin_reset_link_works(client) -> None:
-    _signup(client, "ada@example.com")
-    client.post("/auth/logout")
-    client.cookies.clear()
-
-    # forgot for a real + a fake address both return ok (no enumeration)
-    assert client.post("/auth/forgot", json={"email": "ada@example.com"}).json()["ok"] is True
-    assert client.post("/auth/forgot", json={"email": "nobody@example.com"}).json()["ok"] is True
-
-    # operator mints a reset link (email delivery not configured in test)
-    r = client.post("/api/admin/reset-link", json={"email": "ada@example.com"},
-                    headers={"Authorization": "Bearer admin-t"})
-    assert r.status_code == 200
-    link = r.json()["reset_link"]
-    token = link.split("token=")[1]
-
-    # unknown user -> 404; non-admin -> 403
-    assert client.post("/api/admin/reset-link", json={"email": "nobody@example.com"},
+def test_reset_endpoints_are_gone(client) -> None:
+    # The emailed-reset surface was removed entirely (needs SMTP, not self-service).
+    # The routes no longer exist, so none of them succeeds. The former public
+    # paths now fall through to default-deny (401); the admin route 404s.
+    _signup(client)
+    assert client.post("/auth/forgot", json={"email": "ada@example.com"}).status_code == 401
+    assert client.post("/auth/reset", json={"token": "rst_x", "new_password": "whatever8"}).status_code == 401
+    assert client.get("/reset?token=rst_x").status_code == 401
+    assert client.post("/api/admin/reset-link", json={"email": "ada@example.com"},
                        headers={"Authorization": "Bearer admin-t"}).status_code == 404
-    assert client.post("/api/admin/reset-link", json={"email": "ada@example.com"}).status_code == 401
-
-    # redeem the token -> new password works, token is one-shot
-    assert client.post("/auth/reset", json={"token": token, "new_password": "resetpass123"}).status_code == 200
-    assert client.post("/auth/login", json={"email": "ada@example.com", "password": "resetpass123"}).status_code == 200
-    assert client.post("/auth/reset", json={"token": token, "new_password": "againagain123"}).status_code == 400
-
-
-def test_reset_rejects_bad_token(client) -> None:
-    assert client.post("/auth/reset", json={"token": "rst_nope", "new_password": "whatever8"}).status_code == 400
-    assert client.get("/reset?token=rst_nope").status_code == 200  # page still serves

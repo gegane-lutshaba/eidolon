@@ -1,5 +1,9 @@
 #!/usr/bin/env python
-"""Render docs/whitepaper.md to a print-quality PDF (docs/whitepaper.pdf).
+"""Render docs/whitepaper.md to a print-quality PDF (docs/whitepaper-generated.pdf).
+
+The CANONICAL white paper PDF is now the hand-authored docs/Eidolon-whitepaper.pdf
+(what the site links to). This script only produces a generated preview from the
+markdown, under a distinct name, so it can never clobber the canonical file.
 
 Markdown -> styled HTML -> PDF via Playwright's bundled Chromium, so tables,
 code, and the embedded diagrams render faithfully (no LaTeX table overflow).
@@ -19,7 +23,7 @@ import markdown
 DOCS = pathlib.Path(__file__).resolve().parent
 SRC = DOCS / "whitepaper.md"
 HTML = DOCS / "_whitepaper_build.html"
-PDF = DOCS / "whitepaper.pdf"
+PDF = DOCS / "whitepaper-generated.pdf"
 
 CSS = """
 @page { size: A4; margin: 18mm 16mm 20mm; }

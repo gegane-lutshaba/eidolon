@@ -1,443 +1,458 @@
-# EIDOLON: Provable Delegated Agency for Faithful Digital Twins
+# EIDOLON: Provable Delegated Agency for Faithful Digital AI Twins
 
 **A governance layer that lets a person delegate a cryptographically bounded,
 revocable, fully-attributable slice of their authority to an AI agent that
 decides the way they would — and can prove it.**
 
-**Mthandazo Ndhlovu** · White paper v1 · August 2026 · Built on
+**Mthandazo Ndhlovu** · White paper — **Revision 2** · September 2026 · Built on
 [SAGE](https://github.com/l33tdawg/sage).
 
-![EIDOLON architecture](visuals/architecture.png)
+> **Revision 2 — corrections and contributions welcome.** This is the second
+> revision of the EIDOLON white paper. It was rewritten for clarity, and it may
+> still contain mistakes. If you spot an error, disagree with a claim, or want to
+> sharpen the argument, please open an issue or a pull request on the
+> [repository](https://github.com/gegane-lutshaba/eidolon) and push a revision —
+> this paper is meant to improve in the open.
 
 ---
 
 ## Executive summary
 
-AI agents can now *act* — send email, run code, deploy, execute tools over the
-Model Context Protocol (MCP). But nobody can safely hand one real authority,
-because today's agents force a bad choice: **over-permissioned** (give it your
-tools and hope) or **locked down** (approve every step, and the human is the
-bottleneck again). The missing piece isn't a smarter model — it's a **governance
-layer for authority**.
+As AI agents acquire more autonomous capabilities, organisations face a dilemma:
+either grant them full permissions and endanger safety, or restrict their
+permissions and either make the task more tedious for yourself or make the agent
+ineffective at executing.
 
-EIDOLON is that layer. It separates two independent questions — *would the
-principal act?* (**fidelity**) and *is the agent permitted?* (**authority**) —
-and requires both to pass before any action runs. Authority is carried in
-Ed25519-signed, attenuable credentials that **only ever narrow**, never widen;
-it is **revocable in under a second**; and **every action is attested on a
-consensus ledger**, so an entire session replays and is attributable to a
-delegation chain, its evidence, and its judgment.
+EIDOLON solves this by introducing a governance layer for authority that
+separates **fidelity** (assessing whether an action is in line with what the
+principal would do) from **authority** (checking whether the agent is
+cryptographically authorized to carry out that action).
+
+At the heart of EIDOLON lies the **KAIROS action gate**, which subjects each
+candidate action to a rigorous four-step process — an Authority check, a Fidelity
+assessment, enforcement of the Autonomy Ceiling, and Attestation on a
+BFT-consensus ledger — before any action that has side effects is carried out.
+Because it functions as a governing MCP (Model Context Protocol) gateway, EIDOLON
+can be inserted directly in front of existing agent frameworks with no code
+changes, offering bounded, revocable, and fully attributable delegated agency.
 
 Two invariants are enforced structurally and property-tested in CI:
 
-1. **Default-deny** — any authority not explicitly granted is denied.
-2. **No unattested action** — no side effect runs without a prior successful
-   attestation (*attest-then-act*).
+1. **Default deny:** any authority not explicitly granted is denied.
+2. **No unattested action:** no side effect runs without prior successful
+   attestation (attest-then-act).
 
-Crucially, EIDOLON is **capability-agnostic governance, not tooling**. It ships
-no offensive or dangerous capability; it governs *authority* over whatever tools
-a declarative **Domain Profile** binds. And because it speaks MCP, it drops in
-front of any existing agent — Hermes, Claude Code, OpenClaw, Raptor, Cursor — as
-a **governing gateway**, with zero changes to the agent. If SAGE is *the memory
-layer* agents plug in, EIDOLON is *the authority layer*.
+Above all, EIDOLON is a governance system, not merely a collection of tools. It
+has no offensive or dangerous features; it governs the authority associated with
+the tools listed in a Domain Profile. Because it uses MCP, EIDOLON can sit in
+front of any existing agent — Hermes, Claude Code, OpenClaw, Raptor, or Cursor —
+without changes to the agent. **While SAGE gives agents memory, EIDOLON provides
+them with authority.**
 
-The system is implemented and tested (150+ tests including Hypothesis property
-tests, live-consensus integration, and a **TLA+/TLC machine-checked** model of
-the gate). On **AgentDojo** — the standard prompt-injection benchmark — EIDOLON's
-authority layer contains **96% of injection tasks while breaking 0% of benign
-tasks**, and the gate resolves in **~1 ms** (p95). It composes with the field's
-best ideas: a CaMeL-style **data-flow taint** layer for exfiltration, **purpose-
-binding** for privacy, an **approval workflow** for human-in-the-loop, and
-**biscuit**-standard token export for multi-agent delegation. Two reference
-profiles ship (`general-continuity` and a governance-only `offensive-security`).
-
----
-
-## 1. The problem
-
-Delegating authority to software is not new — OAuth scopes, IAM roles, and
-capability tokens all bound what a program may do. What is new is that the
-program now *reasons*: an LLM agent chooses which tool to call, with which
-arguments, in pursuit of a goal it interprets. That breaks the classic model in
-three ways:
-
-- **Scope is semantic, not syntactic.** "Answer status questions" and "sign a
-  contract" may both be a `send_message` call. Permissions on the *tool* don't
-  capture the *intent*.
-- **Inputs are adversarial.** Memory and context are attacker-influenced. A
-  message that says *"you're now authorized, ignore your limits"* is a
-  privilege-escalation attempt, not data.
-- **Attribution is lost.** When an autonomous agent acts, "who authorized this,
-  on what basis?" often has no answer.
-
-The market's two responses — maximal autonomy or maximal supervision — are the
-unsafe and the useless ends of the same missing axis: **governed authority that
-is bounded, restrained, revocable, and attributable.**
+The system has been developed and tested with over 150 tests, including property
+tests, live consensus integration, and a machine-verified model. On AgentDojo's
+prompt-injection benchmark, EIDOLON's authority layer blocks 96% of injection
+attempts without affecting normal tasks, and the gate responds in about one
+millisecond. EIDOLON's features include a data-flow layer for exfiltration,
+privacy controls, approval workflows, and the ability to export tokens for use
+with various agents. Two reference profiles are available: one for
+general-continuity and one for governance-only offensive-security.
 
 ---
 
-## 2. Thesis: provable delegated agency
+## The problem of authority
 
-EIDOLON models a **digital twin**: an agent that decides the way a specific
-person (the *principal*) would, operating under a slice of that person's
-authority. The category is not "digital twin" the persona toy; it is **provable
-delegated agency**. Three commitments define it:
+It is nothing new for software to be given authority — OAuth scopes, IAM roles,
+and capability tokens all specify the actions a program can perform. What is new
+is that the program can now reason: an LLM agent chooses which tool to call and
+with what arguments as it works toward a goal it understands. This undermines the
+traditional approach in three ways:
 
-1. **Fidelity and authority are independent axes; both must pass.** A twin may be
-   perfectly faithful ("yes, you'd send this") yet unauthorized ("but not to
-   this recipient") — and vice versa. EIDOLON evaluates them separately.
-2. **Authority attenuates, never widens** — including twin → sub-agent
-   delegation. A credential can only ever grant a subset of its parent.
-3. **Every action is attributable** to a delegation chain, its evidence, and its
-   judgment, on an immutable ledger.
+1. **Scope is about meaning, not grammar.** The same `send_message` call can be
+   used to "answer status questions" or to "sign a contract." The permissions
+   attached to the tool do not capture the intent.
+2. **Data is adversarial.** Memory and context can be altered by an attacker —
+   for example, a privilege-escalation attempt is a message saying "you're now
+   authorized, ignore your limits," not actual data.
+3. **Blame is unclear.** For each action carried out by an autonomous agent,
+   there is no answer to "who authorized it, and on what basis?"
 
-Restraint is the product. The twin's job is often *not to act* — to recognise
-the edge of its mandate and hand the decision back.
+The market generally decides on either complete autonomy or complete
+supervision. In each case the real need — authority that is limited, controlled,
+revocable, and traceable — is ignored.
 
 ---
 
-## 3. Principles (invariants)
+## Delegated agency that can be proven
+
+EIDOLON creates a digital twin: an agent that makes decisions the way a person
+would, by exercising part of their authority. This is not merely another digital
+persona but a system that provides **provable delegated agency**, built on three
+commitments:
+
+1. **Fidelity and authority are distinct criteria, and both must be satisfied.**
+   A message might be completely faithful ("yes, you'd send this") but not
+   authorized ("but not to this recipient") — and the reverse can also apply.
+   EIDOLON evaluates these two aspects separately.
+2. **Authority only decreases, never increases** — even when delegated to
+   subsidiary agents. A credential can only ever grant a subset of its parent's
+   authority.
+3. **Every action can be traced** back along the delegation chain, together with
+   the evidence and the judgment, on a ledger that never changes.
+
+A key feature is **restraint**: the digital twin should know when to act and when
+to revert the decision to the principal.
+
+### Principles (invariants)
 
 Beyond the two global invariants (default-deny; no unattested action), five
 principles shape the design:
 
-- Fidelity ("would they act?") and authority ("is it permitted?") are separate
-  and both required.
-- Authority attenuates, never widens.
-- Every action is attributable to a chain, evidence, and judgment.
-- **Certify before you empower.** An autonomy level requires a matching
-  certificate; uncertified capability is capped at *observe*.
-- **The principal owns the twin.** Organizations receive scoped, time-boxed
-  *continuity grants* — never org-owned twins.
+1. Fidelity ("would they act?") and authority ("is it permitted?") are separate
+   from one another and both essential.
+2. Authority reduces, never extends.
+3. Any action can be associated with a chain, a body of evidence, and a judgment.
+4. Empowerment occurs only after certification: a certificate must be given for
+   each level of autonomy, and any ability that has not been certified is limited
+   to observation.
+5. The principal is the sole owner of the twin. Organisations are granted only
+   limited, time-limited access for the sake of continuity — they never obtain
+   the twin itself.
 
 ---
 
-## 4. Architecture
+## The architecture
 
-The core is a fixed, domain-agnostic set of components. Everything
-domain-specific enters through a declarative **Domain Profile**.
+At the heart of the system is a set of fixed components used across all domains,
+with domain-specific details supplied through a declarative **Domain Profile**.
 
 | Component | Role |
 |---|---|
-| **ETHOS** | *Fidelity.* Models the person's judgment (auditable) and voice (generative), hard-isolated. |
-| **THEMIS** | *Authority.* Mints, verifies, attenuates, and revokes delegation credentials. |
-| **KAIROS** | *The action gate.* The single choke point; resolves every candidate action. |
-| **BASANOS** | *Certification.* Gates the autonomy ceiling on fidelity + adversarial-integrity certificates. |
-| **HORKOS** | *Attestation.* Immutable, attributable record of every action, on the consensus ledger. |
+| **ETHOS** | Fidelity. Models the person's judgment (auditable) and voice (generative), hard-isolated. |
+| **THEMIS** | Authority. Mints, verifies, attenuates, and revokes delegation credentials. |
+| **KAIROS** | The action gate. The single choke point that resolves every candidate action. |
+| **BASANOS** | Certification. Gates the autonomy ceiling on fidelity + adversarial-integrity certificates. |
+| **HORKOS** | Attestation. Immutable, attributable record of every action, on the consensus ledger. |
 | **SAGE** | External BFT-consensus memory + attestation ledger (the substrate). |
 | **Domain Profile** | Declarative pack specialising the core for one kind of twin. |
 
-### 4.1 The action gate (KAIROS)
+### The action gate (KAIROS)
 
-![The KAIROS decision gate](visuals/decision-gate.png)
+Every candidate action resolves through KAIROS in a locked order:
 
-Every candidate action resolves through KAIROS in a **locked order**:
+1. **Authority.** `Themis.verify` follows the credential chain all the way back
+   to its root; if the credential is invalid or has been cancelled, access is
+   refused. When a must-escalate class is involved or the blast-radius budget is
+   exceeded, an escalation takes place. This assessment comes from the signed
+   credential and is independent of both memory and the surrounding environment —
+   therefore resistant to gate injection.
+2. **Fidelity.** `Ethos.evaluate` reaches a decision and includes a measure of
+   confidence. The decision is escalated if it is to stop, or if confidence is
+   below the class threshold; if the decision is to proceed with care, it is
+   drafted.
+3. **Ceiling.** The level equals the lowest of `credential.max_autonomy`,
+   `BASANOS.ceiling(class)`, and the config dial. Certify before you give
+   control.
+4. **Attest-then-act.** HORKOS performs the attestation before any side effect is
+   carried out; if the attestation fails, the action is cancelled.
 
-1. **Authority** — `THEMIS.verify` walks the credential chain to root. Invalid or
-   revoked ⇒ **DENY**. A must-escalate class, or a blast-radius budget exceeded ⇒
-   **ESCALATE**. *This step is re-derived from the signed credential, independent
-   of memory or context* — which is what makes the gate injection-resistant.
-2. **Fidelity** — `ETHOS.evaluate` produces a decision and calibrated confidence.
-   STOP or confidence below the class threshold ⇒ **ESCALATE**;
-   proceed-with-care ⇒ **DRAFT**.
-3. **Ceiling** — `level = min(credential.max_autonomy, BASANOS.ceiling(class),
-   config.dial)`. Certify before empower.
-4. **Attest-then-act** — `HORKOS` writes the attestation *before* any side
-   effect commits. If attestation fails, the action aborts.
-
-The five outcomes — **DENY, ESCALATE, DRAFT, NOTIFY, ACT** — are honest by
-construction: no path reaches a side effect without a prior successful
+The possible outcomes are **DENY, ESCALATE, DRAFT, NOTIFY, and ACT**. No action
+with side effects can take place unless there has first been a successful
 attestation.
 
-### 4.2 Authority (THEMIS)
+### Authority (THEMIS)
 
-Credentials are of biscuit/macaroon lineage: Ed25519-signed, chained
-parent→child, offline-verifiable, and **attenuable subset-only**. A delegation
-carries scope selectors, hard exclusions, permitted capability classes,
-must-escalate classes, a validity window, a blast-radius budget (whose
-`scope_expansion` dimension is always 0), a maximum autonomy level, and
-revocation terms including a **dead-man's-switch**.
+The credentials are biscuit/macaroon in origin: they use Ed25519 for signing,
+include a chain running from parent to child, can be verified offline, and permit
+only subsets to be attenuated. A delegation includes scope selectors, hard
+exclusions, permitted capability classes, must-escalate classes, a validity
+period, a blast-radius budget (whose `scope_expansion` is always 0), and
+revocation terms such as a dead-man's switch.
 
-`attenuate(parent, subset)` rejects any child that widens scope, classes, window,
-autonomy, exclusions, or budget on any dimension — a property proved over
-hundreds of randomized cases with Hypothesis. `verify` fails closed on an
-expired, revoked, or broken chain. **Revocation takes effect on the very next
-call** (< 1s), and a missed heartbeat auto-revokes.
+`attenuate(parent, subset)` rejects every child that in any way extends the
+scope, classes, window, autonomy, exclusions, or budget — a conclusion reached
+through hundreds of randomized cases using Hypothesis. Verify fails closed if the
+chain has expired, been revoked, or been broken. Revocation takes effect on the
+very next call (in under one second), and if a heartbeat is missed, automatic
+revocation occurs.
 
-### 4.3 Fidelity (ETHOS)
+### Fidelity (ETHOS)
 
-ETHOS has two engines, hard-isolated as a *security boundary*:
+ETHOS has two engines, hard-isolated as a security boundary:
 
-- **Judgment engine** — auditable and **LLM-free**. A transparent, deterministic
-  policy grounded in consensus-memory retrieval produces the decision,
-  confidence, rationale, and resolvable evidence references. Grounding uses
-  normalized-token relevance plus an optional deterministic embedder, but the
-  *decision* remains a threshold over inspectable scores — **no black-box model
-  may produce a decision** (a determinism test enforces this).
-- **Style engine** — generative (Claude). It renders *voice* for drafts and
-  escalation messages only. It may never emit or influence a decision,
-  confidence, or scope.
+1. **Judgment Engine.** Auditable and uses no large language models. The
+   decision — together with the degree of confidence, the reasoning, and
+   references to resolvable evidence — is generated by a transparent,
+   deterministic policy based on retrieval from consensus memory. This policy
+   employs normalized-token relevance and an optional deterministic embedder, but
+   the decision is made by applying a threshold to inspectable scores; no
+   black-box model is used in reaching any decision (a determinism test ensures
+   this).
+2. **Design Engine.** Uses a generative model (Claude), and only for producing
+   draft documents and escalation messages. It has no ability to make or
+   influence decisions, confidence levels, or scope.
 
-The isolation is enforced two ways: an **import-graph test** proves the judgment
-package never imports the style package, and a **behavioral test** proves that
-removing the style engine changes zero decisions.
+The separation is enforced two ways: an import-graph test ensures the judgment
+package never uses the design package, and a behavioral test confirms that
+removing the design engine has no effect on any decisions.
 
-### 4.4 Certification (BASANOS)
+### Certification (BASANOS)
 
 BASANOS gates the autonomy ceiling on two faces:
 
-- **Fidelity face** — certifies, per capability class, that the twin decides like
-  the principal on held-out real decisions. Uncertified ⇒ ceiling *observe*.
-- **Integrity face** — runs adversarial suites (**memory-poisoning, injection,
-  scope-evasion**). A twin earns an integrity certificate only if every
-  adversarial case is *contained* (denied, escalated, or at most drafted). Where
-  integrity gating is required, an autonomy level above *draft* also requires a
-  passing integrity certificate.
+1. **Fidelity check.** Ensures that, for each capability class, the twin reaches
+   decisions similar to the principal when handling real, previously unseen
+   cases. If this is not certified, the autonomy ceiling is fixed at
+   observation-only.
+2. **Integrity check.** Adversarial tests including memory poisoning, injection,
+   and scope evasion. A twin receives an integrity certificate only if it handles
+   each attack by denying, escalating, or drafting it. Greater autonomy requires
+   passing the integrity certificate.
 
-### 4.5 Attestation (HORKOS) and the ledger (SAGE)
+### Attestation (HORKOS) and the ledger (SAGE)
 
-Each action and escalation yields exactly one attestation — action, class,
-delegation chain to root, evidence references, ETHOS version, judgment,
-confidence, autonomy level, result, and a would-have-escalated flag — persisted
-on SAGE's BFT-consensus ledger. The record is content-hashed and
-tamper-evident; a full session **replays from the ledger alone**. EIDOLON relies
-on SAGE for consensus validation, confidence weighting, decay, Ed25519 identity,
-and encryption — it reimplements none of it.
+For every action and every escalation there is exactly one attestation. It
+contains the action, the class, the delegation chain all the way to the root,
+references to evidence, the ETHOS version, the judgment, the confidence, the
+autonomy level, the result, and a flag showing whether an escalation would have
+taken place. The attestation is stored on SAGE's BFT-consensus ledger. The record
+is secured by a content hash, so any tampering can be detected, and a full
+session can be replayed directly from the ledger. Because EIDOLON relies on SAGE
+for consensus validation, confidence weighting, decay, Ed25519 identity, and
+encryption, it does not reimplement any of these.
 
 ---
 
-## 5. Domain Profiles
+## Domain profiles
 
-A Domain Profile is a declarative pack — capability taxonomy (with reversibility
-and risk tier), mandate schema (scope selectors, exclusions, must-escalate
-classes, budget dimensions), escalation templates, fidelity rubric, and tool
-bindings — validated against invariants (e.g. *no irreversible class may act
-autonomously*; *every high-impact class must always escalate*). Two ship:
+A Domain Profile is a declarative package that includes a capability taxonomy
+(covering reversibility and risk levels), a mandate schema (scope selectors,
+exclusions, must-escalate categories, and budget dimensions), escalation
+templates, a fidelity rubric, and tool bindings. It is checked against several
+invariants (for instance, no irreversible category may act on its own; every
+high-impact category must always require escalation). Two profiles were issued:
 
-- **`general-continuity`** — a twin for an absent or incapacitated knowledge
-  worker. It answers status questions, drafts communications for approval, and
-  posts recoverable status updates — and holds no dangerous capability.
-  `commit-action` always escalates.
-- **`offensive-security`** — a *governance-only* pack for a red-teamer twin
-  confined to an authorized, time-boxed lab/CTF engagement. Consistent with the
-  permanent non-goal, **it ships no offensive capability**; it governs authority
-  over range-bound tools. It is safe-by-construction: integrity-gated by
-  default, every impactful class (exploit, credential-use, lateral-movement,
-  persistence) always escalates, and hard exclusions deny out-of-scope targets,
-  production, third parties, exfiltration, destruction, and DoS.
+1. **General-continuity.** For a twin standing in for a knowledge worker who is
+   absent or unavailable. It can answer status questions, prepare messages for
+   approval, and post recoverable status updates — but it has no dangerous
+   capabilities, and all commit-actions must be escalated.
+2. **Offensive security.** A governance-only profile intended for a
+   red-teamer/penetration-tester in an authorized, time-limited lab or CTF
+   setting. It includes no offensive capabilities; instead it provides authority
+   over a number of tools. Safety features are built in: integrity checks are
+   required, all major actions must be escalated, and strict exclusions prevent
+   actions that are out of scope or could be harmful.
 
 Two further capabilities compose without weakening the core:
 
-- **Self-generated skills** (Hermes-style procedural memory) — the twin learns a
-  reusable plan from a completed session. Skills are **subordinate to the gate**:
-  replaying a skill re-resolves every step through KAIROS, so a skill learned
-  under broad authority yields nothing it isn't currently authorized for.
-- **Aspirational-self / coaching** — reads decision history and ETHOS version
-  diffs to advise the principal. It is **fully decoupled**: an import-graph test
-  proves the decision path never imports it, and it changes zero decisions.
+1. **Self-generated skills.** The twin can distil reusable procedures from
+   earlier sessions, but every step of an acquired skill must pass through the
+   KAIROS gate again — so a skill learned with broad authority cannot be applied
+   in a situation for which the twin is not currently authorized.
+2. **Aspirational-self / coaching.** Advice to the principal is derived by
+   examining decision history and comparing ETHOS versions. It is completely
+   separate from the decision-making process (shown by the import-graph tests)
+   and has no impact on any decisions.
 
 ---
 
-## 6. The authority layer: MCP gateway
+## The authority layer: MCP gateway
 
-![The authority layer for any MCP agent](visuals/gateway.png)
+The approach mirrors SAGE's: a server agent is connected to MCP. EIDOLON provides
+a governing MCP gateway — an MCP proxy that sits in front of the tool server
+below it. Rather than pointing at the server, the agent points at the gateway,
+and each tool call passes through KAIROS before it can reach the server.
 
-Adoption follows the pattern SAGE used: *be a server agents plug in over MCP.*
-EIDOLON ships a **governing MCP gateway** — an MCP proxy that fronts a downstream
-tool server. An agent points at the gateway instead of the raw server, and every
-`tools/call` is routed through KAIROS before it can touch the real tool:
+A declarative policy assigns each tool to a capability class; the scope of a call
+is determined by its arguments (so a request is restricted to the items it
+targets); and when a tool is not mapped to any class, it falls back to the
+always-escalate class. The agent itself remains unchanged. A prompt injection
+that gets through tool arguments cannot increase the level of authority. If the
+gateway's delegation is taken away, the next tool call fails closed within the
+session.
 
-- an **acting** decision forwards to the real tool and returns its result — the
-  attestation is already written (*attest-then-forward*);
-- **draft / escalate / deny** return a structured refusal; the tool is never
-  called.
-
-A tool is mapped to a capability class by a declarative policy; a call's scope is
-derived from its arguments (so a request is bounded by *what it targets*); and an
-**unmapped tool fails closed** to the always-escalate class. The agent is
-unchanged. A prompt-injection smuggled through tool arguments cannot widen
-authority. Revoke the gateway's delegation and the next tool call fails closed,
-mid-session.
-
-The result: point Hermes, Claude Code, OpenClaw, Raptor, or Cursor at the
-gateway and — with zero code changes — every tool call becomes bounded,
-restrained, revocable, and attributable. SAGE gives the agent memory; EIDOLON
-gives it governed authority; and they compose (attestations live on SAGE).
-
-### 6.1 The data-flow layer (taint + purpose)
-
-The authority layer bounds *which* calls run; it intentionally permits reads. A
-thin **data-flow layer** composes beneath it to catch harm that flows *through*
-permitted calls, and it does so through the *same* enforcement mechanism — a
-dynamically-derived exclusion the gate denies and attests:
-
-- **Taint / exfiltration.** The gateway tracks sensitive values returned by
-  private reads; if one appears in an egress call's arguments (a webpage URL, an
-  email body), it derives a `data-exfiltration` exclusion — closing the
-  read-only exfil that an authority layer alone cannot. This is CaMeL-style
-  value-flow tracking, combined with cryptographic authority.
-- **Purpose-binding (privacy).** Data carries the *purpose it was collected for*;
-  a value flowing into a tool serving an incompatible purpose derives a
-  `purpose-limitation` exclusion — the GDPR-style limitation that ToolPrivacyBench
-  measures, enforced structurally rather than by the model's judgment.
-
-### 6.2 Human-in-the-loop, sub-agents, payments, standards
-
-- **Approval workflow.** An escalation becomes a pending item in an approval
-  inbox; the principal approves by *signing* the exact action (a one-time,
-  expiring authorization), and the gate executes it under that approval —
-  attested. An approval only *releases an escalation*; it never grants authority
-  the credential lacks.
-- **Sub-agent delegation.** A twin attenuates its credential to a sub-agent as a
-  cryptographic subset (fewer classes, narrower scope, lower autonomy); the chain
-  verifies to root and cannot widen — the standardized form of "restricted
-  toolsets."
-- **AP2 payments.** An approved payment escalation becomes a signed, AP2-shaped
-  payment mandate (Intent + Cart), bound to the action and its bounds, issuable
-  only by the approving principal.
-- **Standards interop.** THEMIS delegations export as real **biscuit** tokens
-  with native offline (subset-only) attenuation, mapping directly to the IETF
-  agent-token draft — so an EIDOLON credential travels through the wider
-  capability-token ecosystem.
+The result: you can point Hermes, Claude Code, OpenClaw, Raptor, or Cursor at the
+gateway, and each tool call will be subject to limits, control, revocability, and
+traceability — with no code changes. SAGE provides the agent with memory while
+EIDOLON supplies governed authority, the two working together with attestation
+stored on SAGE.
 
 ---
 
-## 7. Security properties & threat model
+## The data-flow layer (taint and purpose)
 
-- **Prompt injection / memory poisoning.** Authority is re-derived from the
-  signed credential at gate step 1, independent of memory or context. A poisoned
-  memory or an "ignore your limits" injection cannot flip the verdict — verified
-  by the integrity suite and dedicated tests.
-- **Privilege escalation via delegation.** Attenuation is subset-only and
-  property-tested; a child can never exceed its parent, and `scope_expansion` is
-  budgeted to zero.
-- **Scope evasion.** A boundary-crossing action mislabeled as benign is still
-  denied by its exclusions; look-alike/out-of-grant targets are denied by scope.
-- **Runaway autonomy.** The autonomy ceiling is `min` of credential, certificate,
-  and org dial; uncertified or integrity-failing capability cannot act
-  unattended. High-impact classes always escalate.
-- **Exfiltration through a permitted tool.** The data-flow layer denies a
-  sensitive value flowing into an egress call, even when the class is allowed
-  (§6.1) — closing the read-only exfil an authority layer alone misses.
-- **Purpose creep.** Data collected for one purpose cannot flow into a tool
-  serving an incompatible purpose (§6.1).
-- **Repudiation.** Attest-then-act plus a consensus ledger make every
-  side-effecting action non-repudiable and replayable.
-- **Loss of control.** Sub-second revocation and a dead-man's-switch bound the
-  window of any delegation.
+The authority layer decides which calls are allowed and intentionally permits
+reads. Below it is a thin data-flow layer whose job is to detect damage passing
+through the permitted calls, using the same enforcement mechanism: a dynamically
+generated exclusion that the gate both denies and confirms.
+
+**Taint.** The gateway tracks sensitive values returned by private reads; if such
+a value appears in the arguments of an egress call (for example, in a webpage URL
+or an email body), a data-exfiltration exclusion is generated — closing the
+read-only exfil that the authority layer alone could not. This combines
+CaMeL-style value-flow tracking with cryptographic authority.
+
+**Purpose.** The purpose for which data was collected is retained; if a value is
+passed to a tool whose purpose is incompatible, the restriction is enforced — a
+GDPR-style limitation enforced structurally rather than by the model's own
+judgment.
 
 ---
 
-## 8. Evaluation
+## Human-in-the-loop, sub-agents, payments, and standards
 
-### 8.1 AgentDojo (security × utility)
+1. **Approval process.** When an escalation takes place, it appears as a pending
+   item in the approval inbox. The principal approves by signing the specific
+   action (giving a one-off, expiring authorisation), after which the gate
+   carries out the action, attested. An approval only releases an escalation; it
+   never grants authority over a missing credential.
+2. **Sub-agent delegation.** A twin reduces its credentials when acting through a
+   sub-agent, using a cryptographic subset (fewer classes, more limited scope,
+   less autonomy). The chain runs all the way back to the root and can go no
+   further — the principled way to describe "restricted toolsets."
+3. **Payments.** Once a payment escalation is approved, it becomes a signed
+   payment mandate (Intent + Cart) in AP2 form, linked to the action and its
+   boundaries, and issuable only by the approving principal.
+4. **Standards.** THEMIS delegation groups produce real biscuit tokens with
+   native offline capabilities (for just the subset), corresponding directly to
+   the IETF agent-token draft — so an EIDOLON credential can be used within the
+   wider capability-token ecosystem.
 
-We evaluate the authority layer on **[AgentDojo](https://arxiv.org/pdf/2406.13352)**
-(97 user tasks, 26 injection tasks across banking, workspace, travel, slack).
-Using each task's ground-truth tool calls, we compute EIDOLON's mandate verdict
-per call — a deterministic, reproducible measurement that isolates exactly the
-layer EIDOLON adds (no LLM runs needed).
+---
+
+## Security properties and threat model
+
+- **Memory / context injection.** Authority is always checked directly against
+  the signed credential at the first gate step, so conclusions are not influenced
+  by memory or context. Even if memory is compromised or a directive to "ignore
+  your limits" is inserted, the decision is unchanged. Confirmed by specific
+  integrity tests.
+- **Privilege escalation via delegation.** Attenuation only produces subsets and
+  is property-tested; a child never has more privileges than its parent, and
+  `scope_expansion` is limited to zero.
+- **Scope evasion.** Even when a boundary-crossing action is described as
+  harmless, it still lies outside scope — scope excludes actions similar to, or
+  falling outside, the designated targets.
+- **Runaway autonomy.** The upper bound of autonomy is the lowest of three
+  factors — the credential, the certificate, and the org dial — so any capability
+  that is uncertified or fails an integrity check must be supervised if it is to
+  act. High-impact classes require escalation.
+- **Exfiltration via an approved tool.** The data-flow layer ensures a sensitive
+  value cannot end up in an egress call even if the class is permitted; closing
+  the read-only exfil hole alone is not sufficient.
+- **Purpose creep.** Data collected for a particular purpose cannot be used in a
+  tool whose purpose is incompatible.
+- **Repudiation.** Because a transaction is witnessed and then carried out with a
+  consensus ledger, any side-effecting action becomes non-repudiable and
+  replayable.
+- **Loss of control.** Halted: any delegation's time limit can be removed on a
+  sub-second basis, alongside the dead-man's-switch.
+
+---
+
+## Evaluation
+
+### AgentDojo (security and utility)
+
+We evaluated the authority layer on AgentDojo (97 user tasks and 26 injection
+tasks across banking, workspace, travel, and Slack). For each task we determine
+EIDOLON's mandate verdict for each tool call on the basis of the ground-truth
+tool calls — a deterministic, reproducible measure that isolates the contribution
+of EIDOLON.
 
 | | Injections contained | Benign tasks broken |
-|---|---:|---:|
-| **EIDOLON authority layer** | **25 / 26 (96%)** | **0 / 97 (0%)** — 38% fully autonomous, 62% one-approval |
+|---|---|---|
+| **EIDOLON authority layer** | 25 / 26 (96%) | 0 / 97 (0%) — 38% fully autonomous, 62% one-approval |
 
-The one miss is a *read-only* exfil (`get_webpage`), which the data-flow layer
-(§6.1) then closes. For reference, CaMeL reports ~67% of attacks defended;
-undefended agents sit at 60–72% success. EIDOLON's containment is **structural
-and content-independent** — a signed credential re-checked independent of the
-prompt, so an injection can't argue past it. `docs/eval-agentdojo.md`.
+The only exception is a read-only exfil (`get_webpage`), which is then handled by
+the data-flow layer. For reference, CaMeL reports 67% of attacks successfully
+defended, while undefended agents' success rate varies between 60% and 72%.
+EIDOLON's containment is structural and content-independent: the signed
+credential is verified separately from the prompt, so an injection cannot bypass
+it.
 
-### 8.2 Machine-checked model
+### Machine-checked model
 
-The gate's invariants are specified in **TLA+** and verified exhaustively with the
-**TLC** model checker: `NoUnattestedAction` (executed ⇒ attested), `DefaultDeny`,
-`ExclusionRespected`, and `AttenuationNeverWidens` all hold over the full state
-space; a deliberately-broken variant that bypasses attest-then-act is *caught*,
-so the check is meaningful. `docs/formal-model.md`.
+The gate's invariants are defined in TLA+ and fully verified with the TLC model
+checker: `NoUnattestedAction` (any action carried out must also be attested),
+`DefaultDeny`, `ExclusionRespected`, and `AttenuationNeverWidens` all stay true
+throughout the entire state space. Moreover, a deliberately constructed version
+that violates attest-then-act is caught — showing the verification is meaningful.
 
-### 8.3 Automated adversarial certification
+### Automated adversarial certification
 
-The integrity face is generative: a procedural (and optional Claude) attacker
-produces *fresh* memory-poisoning / injection / scope-evasion attacks each round,
-and a twin earns an acting-level certificate only by containing every attack over
-all rounds — a continuous adversarial guarantee, not a fixed checklist.
+The integrity face is generative: in every round, a procedural (and optional)
+Claude attacker generates new attacks involving memory poisoning, injection, or
+scope evasion, and the twin obtains an acting-level certificate only if it
+contains all of them across all rounds. This is a continuous adversarial
+guarantee, not a fixed checklist.
 
-### 8.4 Performance and test suite
+### Performance and test suite
 
-`KAIROS.resolve` p95 ≈ **1 ms** (in-memory, excluding LLM/tool execution — ~400×
-under the 400 ms target). 150+ automated tests: Hypothesis property tests
-(attenuation-never-widens, default-deny), isolation tests (style/judgment,
-coaching, skill subordination), gate tests (attest-then-act, injection-resistance),
-data-flow and purpose tests, escalation/approval and payment-mandate tests, and
-live-SAGE integration (cross-principal isolation, attest→replay byte-identical,
-full-session replay).
+`Kairos.resolve` runs in about 1 millisecond (counting only in-memory operations,
+not LLM or tool execution — roughly a 400× reduction from the 400ms target). This
+figure is backed by more than 150 automated tests, including Hypothesis property
+tests (e.g. attenuation-never-widens and default-deny), isolation tests
+(design/judgment, coaching, and skill subordination), gate tests (attest-then-act
+and injection resistance), data-flow and purpose tests, escalation/approval and
+payment-mandate tests, and live SAGE integration tests (cross-principal
+isolation, attest→replay at the byte level, and full-session replay).
 
 ---
 
-## 9. Related work & comparison
+## Related work and comparison
 
-EIDOLON sits at the confluence of several active research strands and contributes
-their *unification* plus two under-explored primitives (a fidelity axis and
-runtime-certified autonomy). A full survey — CaMeL, Progent, biscuit/IBCT and the
-IETF agent-token draft, LlamaFirewall/NeMo, autonomy-certificate work, person-twin
-research, and AgentDojo/ToolPrivacyBench — is in `docs/review-and-related-work.md`.
+EIDOLON sits where several research fields meet, and it integrates them with two
+areas that have not been widely studied: a **fidelity axis** and
+**runtime-certified autonomy**. A thorough review of CaMeL, Progent, biscuit/IBCT
+and the IETF agent-token draft, LlamaFirewall/NeMo, the autonomy-certificate
+work, the person-twin research, and AgentDojo/ToolPrivacyBench is in
+[`docs/review-and-related-work.md`](review-and-related-work.md).
 
-| | Raw MCP agent | Guardrail filters (LlamaFirewall/NeMo) | Privilege policy (Progent) | Data-flow (CaMeL) | **EIDOLON** |
+| Capability | Raw MCP agent | Guardrail filters (LlamaFirewall/NeMo) | Privilege policy (Progent) | Data-flow (CaMeL) | **EIDOLON** |
 |---|---|---|---|---|---|
-| Bounded authority | ✗ | ✗ | ✓ (local policy) | via caps | cryptographic, attenuable |
-| Cryptographic delegation chain | ✗ | ✗ | ✗ | ✗ | ✓ (biscuit-exportable) |
-| Fidelity ("would they act?") | ✗ | ✗ | ✗ | ✗ | ✓ |
-| Runtime-certified autonomy | ✗ | ✗ | ✗ | ✗ | ✓ |
-| Injection-resistant authority | ✗ | detection | partial | ✓ (data-flow) | ✓ (memory-blind credential) |
-| Data-flow / exfil control | ✗ | partial | partial | ✓ | ✓ (composed) |
-| Revocable < 1 s / dead-man | ✗ | ✗ | ✗ | ✗ | ✓ |
-| Attest-then-act on consensus | ✗ | logs | ✗ | ✗ | ✓ |
-| Drop-in (no agent changes) | — | varies | ✓ | ✗ | ✓ (MCP gateway) |
+| Bounded authority | ✗ | ✗ | ✓ (local policy) | via caps | **✓ cryptographic, attenuable** |
+| Cryptographic delegation chain | ✗ | ✗ | ✗ | ✗ | **✓ (biscuit exportable)** |
+| Fidelity ("would they act?") | ✗ | ✗ | ✗ | ✗ | **✓** |
+| Runtime-certified autonomy | ✗ | ✗ | ✗ | ✗ | **✓** |
+| Injection-resistant authority | ✗ | detection | partial | ✓ (data-flow) | **✓ (memory-blind credential)** |
+| Data-flow / exfil control | ✗ | partial | partial | ✓ | **✓ (composed)** |
+| Revocable < 1s / dead-man | ✗ | ✗ | ✗ | ✗ | **✓** |
+| Attest-then-act on consensus | ✗ | logs | ✗ | ✗ | **✓** |
+| Drop-in (no agent changes) | — | varies | ✓ | ✗ | **✓ (MCP gateway)** |
 
 ---
 
-## 10. Status & roadmap
+## Status and roadmap
 
-The core (identity-fidelity + delegated-authority), the governing MCP gateway, the
-data-flow and purpose layers, adversarial certification, the approval workflow,
-sub-agent delegation, biscuit standards interop, AP2 payment mandates, and the
-formal model are **implemented and tested**. Remaining work:
+The core (identity-fidelity and delegated-authority), the governance MCP gateway,
+the data-flow and purpose layers, adversarial certification, the approval
+workflow, sub-agent delegation, biscuit standards interop, AP2 payment mandates,
+and the formal model have all been implemented and tested. The remaining work:
 
-- **Distributed operation** — multi-node SAGE consensus and revocation
-  propagation across distributed gateways (the one infrastructure-bound item).
-- **Live privacy benchmark** — wire ToolPrivacyBench as an executable eval once
-  available (the mechanism already exists).
-- **Ecosystem profiles** — finance ops, customer support, SRE; the profile is the
-  extensibility primitive and the business model.
-- **Richer capture** feeding ETHOS fidelity grounding; a hosted gateway with
-  HTTP/streamable MCP transport; multi-principal organizational governance.
-
----
-
-## 11. Conclusion
-
-Agents that can act are here; agents you can *safely delegate to* are not. The
-gap is not intelligence — it is governed authority: bounded, restrained,
-revocable, attributable. EIDOLON is that layer, and it is designed to be
-adopted the way memory was — as a server your existing agent plugs into. Give an
-agent memory with SAGE; give it governed authority with EIDOLON.
+1. **Distributed operation** — multi-node SAGE consensus and propagation of
+   revocation messages through distributed gateways (the only remaining
+   infrastructure piece).
+2. **Live privacy benchmark** — run ToolPrivacyBench as an executable once it is
+   available (the method is already implemented).
+3. **Ecosystem profiles** — finance operations, customer support, and SRE; these
+   are the extensibility primitive and the business model.
+4. **ETHOS fidelity grounding** — richer capture feeding, alongside a hosted
+   gateway using an HTTP/streamable MCP transport and multi-principal
+   organizational governance.
 
 ---
 
-## Collaborate
+## Conclusion
 
-EIDOLON is an early, working system with a clear thesis and a lot of surface still
-to build — new **Domain Profiles**, richer **fidelity** grounding, distributed
-operation, standards alignment (biscuit / IETF agent tokens / AP2), and live
-benchmarks (AgentDojo, ToolPrivacyBench). If you work on **agent security,
-capability-based authorization, digital twins, or applied cryptography** — or you
-want a profile for your own domain — I'd love to collaborate.
-
-**Mthandazo Ndhlovu** — mthandazogegane@gmail.com
+There are agents capable of taking action, but none you can safely hand
+responsibilities to. The thing that is missing isn't intelligence but **governed
+authority** — limited, controlled, revocable, and traceable. EIDOLON offers this,
+and is meant to be adopted the same way memory was: by having your existing agent
+connect to it. Use SAGE to give an agent memory, and EIDOLON to grant it governed
+authority.
 
 ---
 
-*Glossary — EIDOLON: framework/twin · ETHOS: fidelity · THEMIS: authority ·
-KAIROS: action gate · HORKOS: attestation · BASANOS: certification · Domain
-Profile: declarative domain pack · SAGE: external consensus memory substrate.*
+*Corrections and contributions are welcome — open an issue or a pull request on
+the [repository](https://github.com/gegane-lutshaba/eidolon) and push a revision.*
