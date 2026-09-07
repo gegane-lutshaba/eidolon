@@ -87,6 +87,22 @@ class Settings(BaseSettings):
     signup_open: bool = True
     invite_code: str | None = None
 
+    # --- SSO (OIDC, optional) ---------------------------------------------
+    # Set issuer + client id/secret to let staff sign in via the org IdP
+    # (Google, Okta, Azure AD, Authentik…). Redirect URI is
+    # <public_url>/auth/sso/callback — register it with the IdP.
+    oidc_issuer: str | None = None          # e.g. https://accounts.google.com
+    oidc_client_id: str | None = None
+    oidc_client_secret: str | None = None
+    oidc_scopes: str = "openid email profile"
+    # Restrict to these email domains (comma-separated). Empty = any.
+    oidc_allowed_domains: str | None = None
+    # If set, all SSO users land in this shared org (the company team) instead of
+    # a personal org — so IT sees everyone's agents together.
+    oidc_org_name: str | None = None
+    # Human label for the SSO button (e.g. "Okta", "Google Workspace").
+    oidc_button_label: str = "SSO"
+
     # --- mission control (gateway reporting + live console) ---------------
     # Comma-separated API keys gateways use to report events (POST
     # /ingest/events). The admin token is also accepted. Empty = ingest closed

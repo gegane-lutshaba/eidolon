@@ -73,6 +73,12 @@
       <input id="invite" type="text" autocomplete="off" />
     </div>
     <button class="go" type="submit" id="go">▶ INSERT COIN</button>
+    <div id="ssoRow" style="display:none">
+      <div style="display:flex; align-items:center; gap:10px; color:var(--dim); font-size:11px; margin:14px 0 10px">
+        <span style="flex:1; height:1px; background:var(--line)"></span>OR<span style="flex:1; height:1px; background:var(--line)"></span>
+      </div>
+      <a id="ssoBtn" href="/auth/sso/login" class="go" style="display:block; text-align:center; text-decoration:none; background:transparent; border:1px solid var(--accent); color:var(--accent)">🔐 SIGN IN WITH SSO</a>
+    </div>
     <div class="err" id="err"></div>
     <div class="foot"><a href="/">← title</a></div>
   </form>
@@ -88,6 +94,27 @@ function setMode(m) {
 }
 $("mNew").onclick = () => setMode("signup");
 $("mCont").onclick = () => setMode("login");
+
+// SSO: reveal the button if the deployment has an IdP configured; surface errors.
+(async () => {
+  try {
+    const cfg = await (await fetch("/auth/config")).json();
+    if (cfg.sso) {
+      $("ssoRow").style.display = "block";
+      if (cfg.sso_label && cfg.sso_label !== "SSO")
+        $("ssoBtn").textContent = "🔐 SIGN IN WITH " + cfg.sso_label.toUpperCase();
+    }
+  } catch {}
+  const err = new URLSearchParams(location.search).get("sso_error");
+  if (err) {
+    const msg = { bad_state: "SSO session expired — try again.",
+      exchange_failed: "Could not complete SSO sign-in.",
+      no_verified_email: "Your IdP did not return a verified email.",
+      domain_not_allowed: "Your email domain is not allowed here." };
+    $("err").textContent = msg[err] || ("SSO error: " + err);
+    setMode("login");
+  }
+})();
 
 $("f").addEventListener("submit", async (e) => {
   e.preventDefault();

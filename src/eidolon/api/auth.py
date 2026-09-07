@@ -97,7 +97,7 @@ _PUBLIC = {"/health", "/ready", "/login", "/logout", "/whoami", "/favicon.ico",
            "/auth/logout", "/stats/public", "/portal", "/paper", "/paper/content",
            "/contact", "/versus/stats", "/showcase", "/console",
     "/og.png", "/favicon.svg", "/apple-touch-icon.png", "/icon-512.png",
-    "/site.webmanifest"}
+    "/site.webmanifest", "/auth/config", "/auth/sso/login", "/auth/sso/callback"}
 
 # Paths that require a signed-in USER (or the operator admin): the product app.
 _USER_PREFIX = ("/app", "/api/")

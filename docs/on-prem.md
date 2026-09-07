@@ -69,6 +69,27 @@ port `8000`.
 
 ---
 
+## SSO (staff sign-in via your IdP)
+
+Let employees sign in with the company IdP instead of a separate password. Set
+three env vars (Google, Okta, Azure AD, Authentik — anything OIDC):
+
+```bash
+EIDOLON_OIDC_ISSUER=https://<tenant>.okta.com
+EIDOLON_OIDC_CLIENT_ID=...
+EIDOLON_OIDC_CLIENT_SECRET=...
+# optional:
+EIDOLON_OIDC_ALLOWED_DOMAINS=yourco.com      # only these email domains
+EIDOLON_OIDC_ORG_NAME="YourCo"               # land everyone in one shared team
+EIDOLON_OIDC_BUTTON_LABEL="Okta"
+```
+
+Register **`<EIDOLON_PUBLIC_URL>/auth/sso/callback`** as the IdP redirect URI.
+A "Sign in with …" button then appears at `/signup`; first login provisions the
+user (no password), drops them into `EIDOLON_OIDC_ORG_NAME` if set, and opens a
+session. With `EIDOLON_OIDC_ORG_NAME`, the first user is the org owner and the
+rest join as members — so IT sees the whole company's agents in one team.
+
 ## Point your agents at it
 
 Every developer sets one variable — the rest is the same as the hosted docs.

@@ -279,6 +279,68 @@ def auth_logout(request: Request) -> Response:
     return resp
 
 
+# -- SSO (OIDC) staff login -----------------------------------------------
+_SSO_STATE_COOKIE = "eidolon_sso_state"
+
+
+@app.get("/auth/config")
+def auth_config() -> dict:
+    """What sign-in methods the UI should offer."""
+    from eidolon.api import sso
+
+    s = runtime().settings
+    return {"sso": sso.enabled(s), "sso_label": s.oidc_button_label,
+            "signup_open": s.signup_open}
+
+
+@app.get("/auth/sso/login")
+def auth_sso_login() -> Response:
+    """Kick off the OIDC Authorization Code flow."""
+    import secrets as _secrets
+
+    from eidolon.api import sso
+
+    s = runtime().settings
+    if not sso.enabled(s):
+        raise HTTPException(status_code=404, detail="SSO is not configured")
+    state = _secrets.token_urlsafe(24)
+    resp = RedirectResponse(sso.authorize_url(s, state), status_code=307)
+    resp.set_cookie(_SSO_STATE_COOKIE, state, httponly=True, samesite="lax",
+                    secure=s.session_cookie_secure, max_age=600, path="/")
+    return resp
+
+
+@app.get("/auth/sso/callback")
+def auth_sso_callback(request: Request, code: str | None = None,
+                      state: str | None = None, error: str | None = None) -> Response:
+    """IdP redirect target: verify state, exchange code, provision, open session."""
+    from eidolon.api import sso
+
+    s = runtime().settings
+    if not sso.enabled(s):
+        raise HTTPException(status_code=404, detail="SSO is not configured")
+    if error:
+        return RedirectResponse(f"/signup?sso_error={error}", status_code=303)
+    cookie_state = request.cookies.get(_SSO_STATE_COOKIE)
+    if not code or not state or not cookie_state or state != cookie_state:
+        return RedirectResponse("/signup?sso_error=bad_state", status_code=303)
+    try:
+        tokens = sso.exchange_code(s, code)
+        claims = sso.userinfo(s, tokens.get("access_token", ""))
+    except Exception:  # noqa: BLE001 — never leak IdP internals to the browser
+        return RedirectResponse("/signup?sso_error=exchange_failed", status_code=303)
+    email = sso.claims_to_email(claims)
+    if not email:
+        return RedirectResponse("/signup?sso_error=no_verified_email", status_code=303)
+    if not sso.domain_allowed(s, email):
+        return RedirectResponse("/signup?sso_error=domain_not_allowed", status_code=303)
+    user = accounts_svc.find_or_create_sso_user(_live_store(), email, s.oidc_org_name)
+    token = accounts_svc.open_session(_live_store(), user["id"])
+    resp = _set_user_cookie(RedirectResponse("/app", status_code=303), token)
+    resp.delete_cookie(_SSO_STATE_COOKIE, path="/")
+    return resp
+
+
 ORG_COOKIE = "eidolon_org"
 
 

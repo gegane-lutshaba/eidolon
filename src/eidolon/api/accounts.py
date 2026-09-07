@@ -339,6 +339,50 @@ def create_user(sf, email: str, password: str) -> dict:
         return {"id": user.id, "email": user.email}
 
 
+def _ensure_org_by_name(s, name: str, user_id: str):
+    """Get-or-create a shared (non-personal) org by name and ensure membership.
+    The first member is owner; later members join as `member`. Used by SSO to land
+    a whole company's staff in one team automatically."""
+    from eidolon.data.models import OrgMemberRow, OrgRow
+
+    org = s.query(OrgRow).filter(OrgRow.name == name[:80], OrgRow.personal.is_(False)).first()
+    if org is None:
+        org = _create_org(s, name, personal=False)
+        s.flush()
+    has_members = s.query(OrgMemberRow).filter(OrgMemberRow.org_id == org.id).first() is not None
+    _add_member(s, org.id, user_id, "member" if has_members else "owner")
+    return org
+
+
+def find_or_create_sso_user(sf, email: str, org_name: str | None = None) -> dict:
+    """Provision (or fetch) a user from a verified SSO email. No password is set
+    (SSO is the credential). If ``org_name`` is given, the user is placed in that
+    shared org; otherwise a personal org is created — same as password signup."""
+    from eidolon.data.models import UserRow
+
+    email = email.strip().lower()
+    if "@" not in email:
+        raise ValueError("SSO did not return a valid email")
+    with sf() as s:
+        user = s.query(UserRow).filter(UserRow.email == email).first()
+        created = user is None
+        if user is None:
+            # Random, unusable password — the account signs in via SSO only.
+            user = UserRow(id=f"usr-{secrets.token_urlsafe(9)}", email=email,
+                           password_hash=hash_password(f"sso:{secrets.token_urlsafe(32)}"))
+            s.add(user)
+            s.flush()
+        if org_name:
+            _ensure_org_by_name(s, org_name, user.id)
+        elif created:
+            handle = email.split("@")[0] or "my"
+            org = _create_org(s, f"{handle}'s team", personal=True)
+            s.flush()
+            _add_member(s, org.id, user.id, "owner")
+        s.commit()
+        return {"id": user.id, "email": user.email, "created": created}
+
+
 def authenticate(sf, email: str, password: str) -> dict | None:
     from eidolon.data.models import UserRow
 
