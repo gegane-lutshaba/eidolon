@@ -202,7 +202,26 @@ The style engine (drafts/escalations) uses Claude (`claude-sonnet-4-6` by
 default). Without an API key it falls back to deterministic templates — **no
 judgment or authority decision ever depends on the LLM.**
 
-## Deploy on a single VPS
+## Deploy on-prem (Docker)
+
+Run one EIDOLON on your own infrastructure; every developer's agent routes
+through it. A prebuilt multi-arch image is published to GHCR — `docker pull`, not
+clone-and-build. Full guide: [`docs/on-prem.md`](docs/on-prem.md).
+
+```bash
+# Try it — one container (SQLite store + in-memory ledger; evaluation only)
+docker run -d -p 8000:8000 -v eidolon-data:/data ghcr.io/gegane-lutshaba/eidolon:latest
+
+# Run it for real — app + Postgres (persistent, hash-chained ledger)
+curl -O https://raw.githubusercontent.com/gegane-lutshaba/eidolon/main/docker-compose.deploy.yml
+docker compose -f docker-compose.deploy.yml up -d   # set EIDOLON_DB_PASSWORD + EIDOLON_ADMIN_TOKEN first
+```
+
+The image runs as a non-root user with a `HEALTHCHECK`; point agents at it with
+`EIDOLON_URL=https://your-host` (the [hook](integrations/claude_code/) and `/mcp`
+both take a URL).
+
+### Single VPS (from source, Make targets)
 
 One box, no consensus cluster. The `postgres` SAGE backend persists memory and
 the attestation ledger locally as an **append-only hash chain** — carrying

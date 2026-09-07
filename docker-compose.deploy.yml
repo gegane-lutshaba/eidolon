@@ -29,8 +29,10 @@ services:
     restart: unless-stopped
 
   eidolon:
+    # Pulls the published image by default (docker compose up -d). To build from
+    # source instead, run `docker compose ... up -d --build`.
+    image: ${EIDOLON_IMAGE:-ghcr.io/gegane-lutshaba/eidolon:latest}
     build: .
-    image: eidolon:latest
     depends_on:
       db:
         condition: service_healthy
