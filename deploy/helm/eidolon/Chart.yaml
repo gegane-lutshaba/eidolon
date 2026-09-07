@@ -1,0 +1,16 @@
+apiVersion: v2
+name: eidolon
+description: EIDOLON — the cryptographic authority layer for AI agents (seen, bounded, revocable).
+type: application
+version: 0.1.0
+appVersion: "0.1.0"
+home: https://eidolon.onyxcreator.com
+sources:
+  - https://github.com/gegane-lutshaba/eidolon
+keywords:
+  - ai-agents
+  - governance
+  - mcp
+  - compliance
+maintainers:
+  - name: Gegane

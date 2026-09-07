@@ -1,0 +1,30 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "eidolon.fullname" . }}-config
+  labels:
+    {{- include "eidolon.labels" . | nindent 4 }}
+data:
+  EIDOLON_API_HOST: "0.0.0.0"
+  EIDOLON_API_PORT: "8000"
+  EIDOLON_AUTONOMY_DIAL: {{ .Values.config.autonomyDial | quote }}
+  EIDOLON_HEARTBEAT_TTL_SECONDS: {{ .Values.config.heartbeatTtlSeconds | quote }}
+  EIDOLON_SESSION_COOKIE_SECURE: {{ .Values.config.sessionCookieSecure | quote }}
+  EIDOLON_TRUST_PROXY_HEADERS: {{ .Values.config.trustProxyHeaders | quote }}
+  {{- with .Values.config.publicUrl }}
+  EIDOLON_PUBLIC_URL: {{ . | quote }}
+  {{- end }}
+  {{- with .Values.config.anthropicApiKey }}
+  EIDOLON_ANTHROPIC_API_KEY: {{ . | quote }}
+  {{- end }}
+  {{- with .Values.config.oidc }}
+  EIDOLON_OIDC_ISSUER: {{ .issuer | quote }}
+  EIDOLON_OIDC_CLIENT_ID: {{ .clientId | quote }}
+  EIDOLON_OIDC_SCOPES: {{ .scopes | quote }}
+  EIDOLON_OIDC_ALLOWED_DOMAINS: {{ .allowedDomains | quote }}
+  EIDOLON_OIDC_ORG_NAME: {{ .orgName | quote }}
+  EIDOLON_OIDC_BUTTON_LABEL: {{ .buttonLabel | quote }}
+  {{- end }}
+  {{- range $k, $v := .Values.config.extraEnv }}
+  {{ $k }}: {{ $v | quote }}
+  {{- end }}

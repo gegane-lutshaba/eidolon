@@ -1,0 +1,71 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "eidolon.fullname" . }}
+  labels:
+    {{- include "eidolon.labels" . | nindent 4 }}
+spec:
+  replicas: {{ .Values.replicaCount }}
+  selector:
+    matchLabels:
+      {{- include "eidolon.selectorLabels" . | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "eidolon.selectorLabels" . | nindent 8 }}
+    spec:
+      securityContext:
+        {{- toYaml .Values.podSecurityContext | nindent 8 }}
+      containers:
+        - name: eidolon
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          securityContext:
+            {{- toYaml .Values.securityContext | nindent 12 }}
+          ports:
+            - name: http
+              containerPort: 8000
+          env:
+            - name: EIDOLON_SAGE_BACKEND
+              value: {{ if .Values.postgres.enabled }}"postgres"{{ else if .Values.externalDatabase.url }}"postgres"{{ else }}"memory"{{ end }}
+            - name: EIDOLON_DB_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "eidolon.secretName" . }}
+                  key: EIDOLON_DB_PASSWORD
+            - name: EIDOLON_DATABASE_URL
+              value: {{ include "eidolon.databaseUrl" . | quote }}
+            - name: EIDOLON_ADMIN_TOKEN
+              valueFrom:
+                secretKeyRef: { name: {{ include "eidolon.secretName" . }}, key: EIDOLON_ADMIN_TOKEN }
+            - name: EIDOLON_AUDIT_TOKEN
+              valueFrom:
+                secretKeyRef: { name: {{ include "eidolon.secretName" . }}, key: EIDOLON_AUDIT_TOKEN }
+            - name: EIDOLON_OIDC_CLIENT_SECRET
+              valueFrom:
+                secretKeyRef: { name: {{ include "eidolon.secretName" . }}, key: EIDOLON_OIDC_CLIENT_SECRET }
+          envFrom:
+            - configMapRef:
+                name: {{ include "eidolon.fullname" . }}-config
+          readinessProbe:
+            httpGet: { path: /ready, port: http }
+            initialDelaySeconds: 10
+            periodSeconds: 10
+          livenessProbe:
+            httpGet: { path: /health, port: http }
+            initialDelaySeconds: 20
+            periodSeconds: 20
+          resources:
+            {{- toYaml .Values.resources | nindent 12 }}
+      {{- with .Values.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}

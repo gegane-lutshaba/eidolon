@@ -1,0 +1,4 @@
+.git
+*.tmp
+*.orig
+.DS_Store

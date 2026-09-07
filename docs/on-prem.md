@@ -90,6 +90,24 @@ user (no password), drops them into `EIDOLON_OIDC_ORG_NAME` if set, and opens a
 session. With `EIDOLON_OIDC_ORG_NAME`, the first user is the org owner and the
 rest join as members — so IT sees the whole company's agents in one team.
 
+## Kubernetes (Helm)
+
+For k8s shops, a chart lives at [`deploy/helm/eidolon`](../deploy/helm/eidolon)
+— the app plus an optional bundled Postgres (persistent ledger), or bring your
+own database.
+
+```bash
+helm install eidolon ./deploy/helm/eidolon \
+  --namespace eidolon --create-namespace \
+  --set secrets.adminToken="$(openssl rand -hex 32)" \
+  --set secrets.dbPassword="$(openssl rand -hex 24)" \
+  --set config.publicUrl=https://eidolon.yourco.com \
+  --set ingress.enabled=true --set ingress.host=eidolon.yourco.com
+```
+
+See the [chart README](../deploy/helm/eidolon/README.md) for external-database,
+existing-secret, and SSO options.
+
 ## Point your agents at it
 
 Every developer sets one variable — the rest is the same as the hosted docs.

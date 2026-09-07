@@ -1,0 +1,88 @@
+# EIDOLON Helm chart values.
+
+image:
+  repository: ghcr.io/gegane-lutshaba/eidolon
+  tag: latest
+  pullPolicy: IfNotPresent
+
+replicaCount: 1
+
+# The EIDOLON service.
+service:
+  type: ClusterIP
+  port: 8000
+
+# Ingress (bring your own controller + cert-manager, or terminate TLS upstream).
+ingress:
+  enabled: false
+  className: ""
+  annotations: {}
+  host: eidolon.example.com
+  tls:
+    enabled: false
+    secretName: eidolon-tls
+
+# Secrets. Either let the chart create a Secret from the values below, or point
+# at an existing Secret you manage (existingSecret) with the same keys:
+#   EIDOLON_ADMIN_TOKEN, EIDOLON_AUDIT_TOKEN, EIDOLON_DB_PASSWORD,
+#   EIDOLON_OIDC_CLIENT_SECRET
+secrets:
+  existingSecret: ""        # if set, the chart won't create its own Secret
+  adminToken: ""            # REQUIRED before exposing — `openssl rand -hex 32`
+  auditToken: ""
+  dbPassword: "change-me"   # used by the bundled Postgres + the app DSN
+  oidcClientSecret: ""
+
+# Non-secret configuration -> injected as EIDOLON_* env.
+config:
+  publicUrl: ""             # https://eidolon.example.com — deep links + SSO redirect
+  autonomyDial: autonomous  # observe | draft | notify | autonomous
+  sessionCookieSecure: true # true behind HTTPS
+  trustProxyHeaders: true   # true behind an ingress/proxy (real client IPs)
+  heartbeatTtlSeconds: 3600
+  # SSO (OIDC) — leave issuer blank to disable. clientSecret goes in secrets.
+  oidc:
+    issuer: ""
+    clientId: ""
+    scopes: "openid email profile"
+    allowedDomains: ""      # csv; empty = any verified email
+    orgName: ""             # shared team for all SSO users; empty = personal orgs
+    buttonLabel: "SSO"
+  # Optional Claude-voiced drafts (judgment/authority never use it).
+  anthropicApiKey: ""
+  # Extra raw EIDOLON_* env (escape hatch).
+  extraEnv: {}
+
+# Bundled Postgres (pgvector) for the persistent, hash-chained ledger. Disable
+# and set externalDatabase.url to use your own managed Postgres.
+postgres:
+  enabled: true
+  image: pgvector/pgvector:pg16
+  storage: 10Gi
+  storageClassName: ""
+  resources:
+    requests: { cpu: 100m, memory: 256Mi }
+    limits: { memory: 1Gi }
+
+externalDatabase:
+  # e.g. postgresql+psycopg://user:pass@host:5432/eidolon (used when postgres.enabled=false)
+  url: ""
+
+resources:
+  requests: { cpu: 100m, memory: 256Mi }
+  limits: { memory: 1Gi }
+
+# Pod hardening. The image already runs as uid 10001.
+podSecurityContext:
+  runAsNonRoot: true
+  runAsUser: 10001
+  fsGroup: 10001
+securityContext:
+  allowPrivilegeEscalation: false
+  readOnlyRootFilesystem: false
+  capabilities:
+    drop: ["ALL"]
+
+nodeSelector: {}
+tolerations: []
+affinity: {}

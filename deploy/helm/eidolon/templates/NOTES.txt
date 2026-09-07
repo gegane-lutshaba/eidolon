@@ -1,0 +1,23 @@
+EIDOLON is deploying.
+
+1. Watch it come up:
+   kubectl -n {{ .Release.Namespace }} rollout status deploy/{{ include "eidolon.fullname" . }}
+
+2. Reach it:
+{{- if .Values.ingress.enabled }}
+   http{{ if .Values.ingress.tls.enabled }}s{{ end }}://{{ .Values.ingress.host }}
+{{- else }}
+   kubectl -n {{ .Release.Namespace }} port-forward svc/{{ include "eidolon.fullname" . }} 8000:{{ .Values.service.port }}
+   then open http://localhost:8000
+{{- end }}
+
+{{- if not .Values.secrets.existingSecret }}
+{{- if not .Values.secrets.adminToken }}
+
+⚠  No admin token set — EIDOLON is running OPEN. Set secrets.adminToken
+   (openssl rand -hex 32) before exposing this to a network.
+{{- end }}
+{{- end }}
+
+3. Point agents at it with EIDOLON_URL=<the URL above> — the Claude Code hook
+   and the /mcp endpoint both take a URL. See docs/on-prem.md.
