@@ -15,6 +15,7 @@ delegate exactly the authority you choose, and kill it mid-session.</p>
   🕹️ <b><a href="https://eidolon.onyxcreator.com/versus">Try VERSUS live</a></b> —
   watch a famous agent get wrecked by a real attack, then the same attack hit the gate ·
   <a href="https://eidolon.onyxcreator.com/challenge">break the gate</a> ·
+  <a href="https://eidolon.onyxcreator.com/roadmap">the boss run (roadmap)</a> ·
   <a href="https://eidolon.onyxcreator.com/paper">white paper</a>
 </p>
 

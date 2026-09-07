@@ -811,6 +811,12 @@ def signup_page() -> str:
     return (_STATIC / "signup.html").read_text(encoding="utf-8")
 
 
+@app.get("/roadmap", response_class=HTMLResponse)
+def roadmap_page() -> str:
+    """The public roadmap — Gegane's boss run (what shipped, what's next)."""
+    return (_STATIC / "roadmap.html").read_text(encoding="utf-8")
+
+
 @app.get("/portal", response_class=HTMLResponse)
 def portal_page() -> str:
     """The ONYX ARCADE portal served at the root domain (via Caddy rewrite)."""
