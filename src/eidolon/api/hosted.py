@@ -109,13 +109,17 @@ class LocalReporter:
 
 def build_hosted_engine(agent: dict, sf, hub):
     """A per-agent GovernanceEngine over the hosted sandbox tools."""
-    from eidolon.api.accounts import PRESETS, split_preset
+    from eidolon.api import accounts as acc
     from eidolon.common import crypto
     from eidolon.gateway.config import GatewayConfig, build_engine
+    from eidolon.gateway.orgpolicy import OrgPolicy
     from eidolon.sage import InMemorySagePort
 
-    _, authority = split_preset(agent["preset"])
-    preset = PRESETS[authority]
+    _, authority = acc.split_preset(agent["preset"])
+    preset = acc.PRESETS[authority]
+    org_id = agent.get("org_id")
+    policy = acc.get_org_policy(sf, org_id) if org_id else {}
+    org_pol = OrgPolicy(lambda: acc.get_org_policy(sf, org_id)) if org_id else None
     key = crypto.generate_keypair()
     cfg = GatewayConfig(
         profile_id="general-continuity",
@@ -125,9 +129,10 @@ def build_hosted_engine(agent: dict, sf, hub):
         max_autonomy=preset["max_autonomy"],
         seed_memories=[s for s in _SEEDS for _ in range(6)],
         tool_policies=_policies(),  # type: ignore[arg-type]
+        extra_escalation_required=list(policy.get("approval_classes") or []),
         gateway_id=agent["id"], agent_name=agent["name"],
     )
-    engine = build_engine(cfg, sage=InMemorySagePort())
+    engine = build_engine(cfg, sage=InMemorySagePort(), org_policy=org_pol)
     engine._reporter = LocalReporter(sf, hub, agent["id"], agent["name"])  # noqa: SLF001
     return engine
 

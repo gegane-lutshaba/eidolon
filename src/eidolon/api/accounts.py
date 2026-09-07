@@ -218,6 +218,62 @@ def set_retention(sf, org_id: str, days: int) -> int:
     return days
 
 
+_POLICY_KEYS = ("blocked_paths", "egress_allowlist", "approval_classes")
+
+
+def _empty_policy() -> dict:
+    return {k: [] for k in _POLICY_KEYS}
+
+
+def _normalize_policy(policy: dict | None) -> dict:
+    """Coerce a policy blob to {blocked_paths, egress_allowlist, approval_classes}
+    of clean string lists (deduped, trimmed, capped)."""
+    out = _empty_policy()
+    if not isinstance(policy, dict):
+        return out
+    for k in _POLICY_KEYS:
+        vals = policy.get(k) or []
+        if isinstance(vals, str):
+            vals = [vals]
+        seen: list[str] = []
+        for v in vals:
+            v = str(v).strip()
+            if v and v not in seen:
+                seen.append(v)
+        out[k] = seen[:200]
+    return out
+
+
+def get_org_policy(sf, org_id: str) -> dict:
+    import json
+
+    from eidolon.data.models import OrgRow
+
+    with sf() as s:
+        o = s.get(OrgRow, org_id)
+        raw = o.policy if o else None
+    if not raw:
+        return _empty_policy()
+    try:
+        return _normalize_policy(json.loads(raw))
+    except (ValueError, TypeError):
+        return _empty_policy()
+
+
+def set_org_policy(sf, org_id: str, policy: dict) -> dict:
+    import json
+
+    from eidolon.data.models import OrgRow
+
+    clean = _normalize_policy(policy)
+    with sf() as s:
+        o = s.get(OrgRow, org_id)
+        if o:
+            o.policy = json.dumps(clean)
+            s.commit()
+    return clean
+
+
 def create_org(sf, user_id: str, name: str) -> dict:
     with sf() as s:
         org = _create_org(s, name)
@@ -462,8 +518,8 @@ def agent_for_gateway_key(sf, key: str | None) -> dict | None:
 
 def _agent_dict(a) -> dict:
     kind, authority = split_preset(a.preset)
-    return {"id": a.id, "user_id": a.user_id, "name": a.name, "preset": a.preset,
-            "kind": kind, "authority": authority,
+    return {"id": a.id, "user_id": a.user_id, "org_id": a.org_id, "name": a.name,
+            "preset": a.preset, "kind": kind, "authority": authority,
             "rank": PRESETS[authority]["rank"],
             "gateway_key": a.gateway_key,
             "created_at": a.created_at.isoformat() if a.created_at else None}

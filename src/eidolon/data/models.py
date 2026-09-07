@@ -154,6 +154,9 @@ class OrgRow(Base):
     name: Mapped[str] = mapped_column(String, default="")
     personal: Mapped[bool] = mapped_column(default=False)  # the owner's auto-created team
     retention_days: Mapped[int | None] = mapped_column(Integer, nullable=True)  # declared policy
+    # Org-wide governance policy every managed agent inherits (JSON string):
+    # {blocked_paths, egress_allowlist, approval_classes}. Null = no extra policy.
+    policy: Mapped[str | None] = mapped_column(String, nullable=True)
     created_at: Mapped[_dt.datetime] = mapped_column(DateTime(timezone=True), default=_utcnow)
 
 

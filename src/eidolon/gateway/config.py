@@ -12,6 +12,8 @@ builder mints it from the principal key for convenience.
 
 from __future__ import annotations
 
+from typing import Any
+
 from pydantic import BaseModel, Field
 
 from eidolon.basanos import Basanos, KairosTwinAdapter
@@ -64,6 +66,9 @@ class GatewayConfig(BaseModel):
     report_key: str | None = None  # a configured EIDOLON_GATEWAY_KEYS entry
     gateway_id: str = "gateway"
     agent_name: str = ""  # display name in the console, e.g. "claude-code"
+    # Org policy: action classes forced to require human approval (must-escalate),
+    # merged into the credential on top of the profile's own escalation_required.
+    extra_escalation_required: list[str] = Field(default_factory=list)
 
 
 def build_engine(
@@ -72,6 +77,7 @@ def build_engine(
     sage: SagePort | None = None,
     style: StyleEngine | None = None,
     settings: Settings | None = None,
+    org_policy: Any | None = None,
 ) -> GovernanceEngine:
     settings = settings or Settings()
     sage = sage if sage is not None else get_sage()
@@ -96,7 +102,8 @@ def build_engine(
         scope=config.scope,
         exclusions=config.exclusions if config.exclusions is not None else list(profile.mandate_schema.exclusion_types),
         permitted_classes=config.permitted_classes or list(profile.class_names()),
-        escalation_required=list(profile.mandate_schema.escalation_required),
+        escalation_required=list(dict.fromkeys(
+            list(profile.mandate_schema.escalation_required) + list(config.extra_escalation_required))),
         window=Window(),
         blast_radius_budget=budget,
         max_autonomy=config.max_autonomy,
@@ -146,5 +153,5 @@ def build_engine(
     return GovernanceEngine(
         kairos=kairos, policy_map=policy_map, chain=[root], principal_id=principal_pub,
         certificates=certs, integrity_certificate=icert, taint=taint, purpose=purpose,
-        reporter=reporter,
+        reporter=reporter, org_policy=org_policy,
     )

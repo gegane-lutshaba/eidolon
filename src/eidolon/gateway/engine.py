@@ -63,6 +63,7 @@ class GovernanceEngine:
         taint: TaintTracker | None = None,
         purpose: PurposeTracker | None = None,
         reporter: Any | None = None,  # gateway.reporter.Reporter (mission control)
+        org_policy: Any | None = None,  # gateway.orgpolicy.OrgPolicy (org guardrails)
     ) -> None:
         self._kairos = kairos
         self._policies = policy_map
@@ -73,6 +74,7 @@ class GovernanceEngine:
         self._taint = taint
         self._purpose = purpose
         self._reporter = reporter
+        self._org_policy = org_policy
 
     def decide(self, tool: str, arguments: dict) -> GovernedResult:
         """Govern a tool call WITHOUT forwarding (sync). ``allowed`` means the
@@ -106,6 +108,10 @@ class GovernanceEngine:
         # into a tool serving an incompatible purpose.
         if self._purpose is not None:
             exclusions += self._purpose.purpose_violations(arguments, policy.purpose)
+        # Org policy: admin-set guardrails (blocked paths, egress allowlist) that
+        # every managed agent inherits — same deny-and-attest path as above.
+        if self._org_policy is not None:
+            exclusions += self._org_policy.violations(tool, arguments)
         action = Action(
             id=f"tool:{tool}",
             action_class=policy.action_class,

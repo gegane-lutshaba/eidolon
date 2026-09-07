@@ -47,6 +47,9 @@ domain_profile:
       # Data collected for one purpose may not be used for another (privacy
       # purpose-limitation). Derived dynamically by the gateway.
       - purpose-limitation
+      # Org-wide guardrails (derived per-call from the org's policy).
+      - org-restricted-path
+      - org-egress-blocked
     escalation_required: [commit-action]
     budget_dimensions: [posts_per_window]
 

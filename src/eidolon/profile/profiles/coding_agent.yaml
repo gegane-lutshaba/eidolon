@@ -52,6 +52,9 @@ domain_profile:
       # Static boundaries an operator can pin onto a mandate.
       - secret-egress
       - external-network
+      # Org-wide guardrails (derived per-call from the org's policy).
+      - org-restricted-path
+      - org-egress-blocked
     escalation_required: [destructive-command]
     budget_dimensions: [egress_per_window]
 

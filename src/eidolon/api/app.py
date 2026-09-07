@@ -386,6 +386,24 @@ def api_set_retention(request: Request, days: int = Body(..., embed=True)) -> di
     return {"retention_days": accounts_svc.set_retention(_live_store(), org_id, days)}
 
 
+@app.get("/api/orgs/policy")
+def api_get_org_policy(request: Request) -> dict:
+    """Org-wide guardrails every managed agent inherits."""
+    _user, org_id = _req_org(request, "auditor")
+    return accounts_svc.get_org_policy(_live_store(), org_id)
+
+
+@app.post("/api/orgs/policy")
+def api_set_org_policy(request: Request, policy: dict = Body(..., embed=True)) -> dict:
+    """Set org guardrails (admin). blocked_paths + egress_allowlist take effect on
+    the next call; approval_classes rebuild the org's coding engines now."""
+    _user, org_id = _req_org(request, "admin")
+    sf = _live_store()
+    saved = accounts_svc.set_org_policy(sf, org_id, policy)
+    _coding_engines().evict(accounts_svc.owned_gateway_ids(sf, org_id))
+    return saved
+
+
 # -- compliance & audit packs ---------------------------------------------
 def _build_compliance(request: Request, days: int) -> dict:
     import datetime as _dt

@@ -122,6 +122,7 @@
     <select id="orgSel" title="team"
       style="background:var(--bg);border:1px solid var(--line);color:var(--ink);border-radius:7px;padding:6px 9px;font-family:inherit;font-size:12px"></select>
     <button class="btn" id="teamBtn" style="font-size:8px">👥 TEAM</button>
+    <button class="btn" id="policyBtn" style="font-size:8px">🛡 POLICY</button>
     <button class="btn" id="compBtn" style="font-size:8px">📋 COMPLIANCE</button>
     <span class="conn"><span class="dot" id="sse"></span><span id="sseTxt">connecting…</span></span>
     <span class="who" id="who" style="cursor:pointer" title="account"></span>
@@ -154,6 +155,31 @@
       <div style="display:flex; gap:8px"><input id="retDays" type="number" min="1" />
         <button class="newbtn" id="retBtn" style="width:auto">SAVE</button></div>
     </div>
+  </div>
+</div>
+
+<!-- org policy modal -->
+<div class="overlay" id="policy">
+  <div class="modal">
+    <button class="btn mclose" onclick="document.getElementById('policy').classList.remove('open')">✕</button>
+    <h3>🛡 ORG POLICY</h3>
+    <div style="color:var(--dim); font-size:12.5px; margin-bottom:14px">Org-wide guardrails every
+      <b style="color:var(--ink)">managed</b> agent inherits (hosted MCP + the Claude Code hook).
+      Enforced structurally by the gate — attested, and visible in the feed.</div>
+    <label>Blocked paths <span style="color:var(--dim)">— agents may not read/edit/shell these (one per line)</span></label>
+    <textarea id="polPaths" rows="3" placeholder="/etc&#10;.ssh&#10;.env&#10;secrets/"
+      style="width:100%; background:var(--bg); border:1px solid var(--line); color:var(--ink); border-radius:8px; padding:9px 11px; font-family:ui-monospace,Menlo,monospace; font-size:12px"></textarea>
+    <label style="margin-top:12px">Egress allowlist <span style="color:var(--dim)">— if set, web/shell egress to any other host is denied (one host per line)</span></label>
+    <textarea id="polEgress" rows="3" placeholder="github.com&#10;docs.python.org&#10;pypi.org"
+      style="width:100%; background:var(--bg); border:1px solid var(--line); color:var(--ink); border-radius:8px; padding:9px 11px; font-family:ui-monospace,Menlo,monospace; font-size:12px"></textarea>
+    <label style="margin-top:12px">Require approval for</label>
+    <div id="polClasses" style="display:flex; flex-wrap:wrap; gap:6px 14px; margin-top:4px"></div>
+    <div style="display:flex; gap:8px; align-items:center; margin-top:16px">
+      <button class="newbtn" id="polSave" style="width:auto">SAVE POLICY</button>
+      <span id="polMsg" style="color:var(--dim); font-size:12px"></span>
+    </div>
+    <div id="polReadonly" style="display:none; color:var(--amber); font-size:12px; margin-top:10px">
+      You have read-only (auditor) access — ask an admin to change policy.</div>
   </div>
 </div>
 
@@ -595,6 +621,40 @@ $("compBtn").onclick = async () => {
   runCompliance();
 };
 $("compRun").onclick = runCompliance;
+
+// --- org policy ---------------------------------------------------------
+const POLICY_CLASSES = ["edit-code", "run-command", "web-egress", "destructive-command"];
+const _lines = (s) => s.split("\n").map(x => x.trim()).filter(Boolean);
+async function openPolicy() {
+  const admin = ME.role === "admin" || ME.role === "owner";
+  $("polReadonly").style.display = admin ? "none" : "block";
+  $("polSave").style.display = admin ? "inline-block" : "none";
+  const p = await (await fetch("/api/orgs/policy")).json().catch(() => ({}));
+  $("polPaths").value = (p.blocked_paths || []).join("\n");
+  $("polEgress").value = (p.egress_allowlist || []).join("\n");
+  const on = new Set(p.approval_classes || []);
+  $("polClasses").innerHTML = POLICY_CLASSES.map(c =>
+    `<label style="display:flex; gap:6px; align-items:center; font-size:12.5px; color:var(--ink)">
+      <input type="checkbox" class="polcls" value="${c}" style="width:auto" ${on.has(c) ? "checked" : ""}
+        ${admin ? "" : "disabled"}/> ${c}</label>`).join("");
+  $("polPaths").disabled = $("polEgress").disabled = !admin;
+  $("polMsg").textContent = "";
+  $("policy").classList.add("open");
+}
+$("policyBtn").onclick = openPolicy;
+$("polSave").onclick = async () => {
+  const policy = {
+    blocked_paths: _lines($("polPaths").value),
+    egress_allowlist: _lines($("polEgress").value),
+    approval_classes: [...document.querySelectorAll(".polcls:checked")].map(c => c.value),
+  };
+  const r = await fetch("/api/orgs/policy", { method: "POST",
+    headers: { "content-type": "application/json" }, body: JSON.stringify({ policy }) });
+  const m = $("polMsg");
+  if (r.ok) { m.style.color = "var(--green)"; m.textContent = "✓ policy saved — enforced on the next action";
+    loadGovernance(); }
+  else { m.style.color = "var(--red)"; m.textContent = (await r.json().catch(() => ({}))).detail || "failed"; }
+};
 
 // --- governance posture (readable compliance answer) --------------------
 async function loadGovernance() {
