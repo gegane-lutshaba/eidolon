@@ -221,6 +221,14 @@ The image runs as a non-root user with a `HEALTHCHECK`; point agents at it with
 `EIDOLON_URL=https://your-host` (the [hook](integrations/claude_code/) and `/mcp`
 both take a URL).
 
+**Kubernetes** — a published Helm chart (app + optional bundled Postgres):
+
+```bash
+helm install eidolon oci://ghcr.io/gegane-lutshaba/charts/eidolon --version 0.1.0 \
+  --namespace eidolon --create-namespace \
+  --set secrets.adminToken="$(openssl rand -hex 32)"
+```
+
 ### Single VPS (from source, Make targets)
 
 One box, no consensus cluster. The `postgres` SAGE backend persists memory and

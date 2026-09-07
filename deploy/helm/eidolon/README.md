@@ -6,7 +6,16 @@ persistent, hash-chained attestation ledger.
 ## Install
 
 ```bash
-# From a checkout (no chart repo needed):
+# From the published OCI chart (no checkout needed):
+helm install eidolon oci://ghcr.io/gegane-lutshaba/charts/eidolon --version 0.1.0 \
+  --namespace eidolon --create-namespace \
+  --set secrets.adminToken="$(openssl rand -hex 32)" \
+  --set secrets.dbPassword="$(openssl rand -hex 24)" \
+  --set config.publicUrl=https://eidolon.yourco.com
+```
+
+```bash
+# …or from a checkout:
 helm install eidolon ./deploy/helm/eidolon \
   --namespace eidolon --create-namespace \
   --set secrets.adminToken="$(openssl rand -hex 32)" \

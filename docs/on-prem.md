@@ -97,7 +97,8 @@ For k8s shops, a chart lives at [`deploy/helm/eidolon`](../deploy/helm/eidolon)
 own database.
 
 ```bash
-helm install eidolon ./deploy/helm/eidolon \
+# Published OCI chart — no checkout needed:
+helm install eidolon oci://ghcr.io/gegane-lutshaba/charts/eidolon --version 0.1.0 \
   --namespace eidolon --create-namespace \
   --set secrets.adminToken="$(openssl rand -hex 32)" \
   --set secrets.dbPassword="$(openssl rand -hex 24)" \

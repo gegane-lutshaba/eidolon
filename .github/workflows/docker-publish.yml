@@ -55,3 +55,24 @@ jobs:
           labels: ${{ steps.meta.outputs.labels }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
+
+  chart:
+    # Package the Helm chart and push it to GHCR as an OCI artifact, so users can
+    # `helm install oci://ghcr.io/gegane-lutshaba/charts/eidolon` without a checkout.
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: azure/setup-helm@v4
+        with:
+          version: v3.16.2
+      - name: Lint
+        run: helm lint deploy/helm/eidolon
+      - name: Log in to GHCR (Helm OCI)
+        run: helm registry login ghcr.io -u ${{ github.actor }} -p ${{ secrets.GITHUB_TOKEN }}
+      - name: Package + push
+        run: |
+          helm package deploy/helm/eidolon -d dist
+          helm push dist/eidolon-*.tgz oci://ghcr.io/${{ github.repository_owner }}/charts
