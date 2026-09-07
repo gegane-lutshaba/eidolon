@@ -192,6 +192,16 @@
       <div id="agents"><div class="empty">Loading…</div></div>
       <button class="newbtn" id="newAgent">+ ENROLL NEW AGENT</button>
     </div>
+    <div class="panel" id="govPanel">
+      <h2 style="display:flex; justify-content:space-between; align-items:center; gap:8px">
+        <span>GOVERNANCE POSTURE</span>
+        <select id="govDays" style="background:var(--bg);border:1px solid var(--line);color:var(--ink);border-radius:6px;padding:5px 7px;font-family:inherit;font-size:11px">
+          <option value="7">7d</option><option value="30" selected>30d</option>
+          <option value="90">90d</option><option value="365">1y</option>
+        </select>
+      </h2>
+      <div id="govOut"><div class="empty">Loading…</div></div>
+    </div>
   </div>
   <div>
     <h2 style="margin-top:4px">LIVE ACTION FEED</h2>
@@ -495,8 +505,11 @@ function pushEvent(e, fresh=true) {
     if (e.level === "DENY" && !achieved.block) { achieved.block = 1; toast("🛡 FIRST BLOCK — the gate held"); }
     if (e.level === "KILLED" && !achieved.kill) { achieved.kill = 1; toast("⛔ RED BUTTON — authority revoked"); }
     loadAgents();
+    if (govDirty) clearTimeout(govDirty);
+    govDirty = setTimeout(loadGovernance, 1500);  // keep the posture fresh, debounced
   }
 }
+let govDirty = null;
 function connectSSE() {
   const es = new EventSource("/api/feed");
   es.onopen = () => { $("sse").className = "dot on"; $("sseTxt").textContent = "live"; };
@@ -583,6 +596,52 @@ $("compBtn").onclick = async () => {
 };
 $("compRun").onclick = runCompliance;
 
+// --- governance posture (readable compliance answer) --------------------
+async function loadGovernance() {
+  const days = $("govDays") ? $("govDays").value : 30;
+  const r = await fetch(`/api/governance/summary?days=${days}`).catch(() => null);
+  if (!r || !r.ok) { $("govOut").innerHTML = `<div class="empty">unavailable</div>`; return; }
+  const d = await r.json();
+  if (!d.actions_governed) {
+    $("govOut").innerHTML = `<div class="empty">No governed actions yet in this window. Connect an
+      agent (or wire the Claude Code hook) and its activity lands here.</div>`;
+    return;
+  }
+  const inScope = d.allowed, blocked = d.denied + d.killed;
+  const stat = (n, label, col) => `<div style="flex:1 1 72px; min-width:72px; background:var(--bg);
+    border:1px solid var(--line); border-radius:8px; padding:9px 10px; text-align:center">
+    <div style="font-family:var(--pixel); font-size:14px; color:${col}">${n}</div>
+    <div style="color:var(--dim); font-size:10px; margin-top:6px; letter-spacing:.3px">${label}</div></div>`;
+  const classRows = Object.entries(d.by_action_class)
+    .sort((a, b) => b[1].total - a[1].total).slice(0, 6).map(([cls, v]) => {
+      const pct = v.total ? Math.round(100 * v.blocked / v.total) : 0;
+      return `<div style="display:flex; align-items:center; gap:8px; margin:5px 0; font-size:12px">
+        <span style="flex:1; color:var(--ink)">${esc(cls)}</span>
+        <span style="color:var(--dim)">${v.total}</span>
+        <span style="width:70px; height:6px; background:#1a0d10; border-radius:6px; overflow:hidden">
+          <span style="display:block; height:100%; width:${pct}%; background:var(--red)"></span></span>
+        <span style="color:var(--red); width:34px; text-align:right">${v.blocked}</span></div>`;
+    }).join("");
+  $("govOut").innerHTML = `
+    <div style="display:flex; gap:8px; flex-wrap:wrap">
+      ${stat(d.actions_governed, "GOVERNED", "var(--ink)")}
+      ${stat(inScope, "IN SCOPE", "var(--green)")}
+      ${stat(d.held, "HELD", "var(--amber)")}
+      ${stat(blocked, "DENIED", "var(--red)")}
+    </div>
+    <div style="margin-top:10px; background:rgba(255,92,92,.08); border:1px solid var(--red);
+      border-radius:8px; padding:9px 11px; font-size:12.5px">
+      <b style="color:var(--red)">${d.exfil_blocked}</b> data-exfiltration attempt${d.exfil_blocked === 1 ? "" : "s"} blocked
+      <span style="color:var(--dim)"> — sensitive values kept in-bounds</span></div>
+    <div style="color:var(--dim); font-size:11px; text-transform:uppercase; letter-spacing:.4px; margin:14px 0 4px">
+      Activity by action class <span style="float:right">total · blocked</span></div>
+    ${classRows}
+    <div style="color:var(--dim); font-size:11px; margin-top:10px">
+      ${d.agents_active} agent(s) active · ${esc(d.period.from.slice(0, 10))} → ${esc(d.period.to.slice(0, 10))}
+      ${d.truncated ? " · showing a capped sample" : ""}</div>`;
+}
+$("govDays") && ($("govDays").onchange = loadGovernance);
+
 // --- account / change password ------------------------------------------
 $("who").onclick = () => {
   if (!ME.email) return;
@@ -627,6 +686,7 @@ $("retBtn") && ($("retBtn").onclick = async () => {
   achieved.first = recent.length > 0 ? 1 : 0;
   achieved.block = recent.some(e => e.level === "DENY") ? 1 : 0;
   await loadAgents();
+  loadGovernance();
   connectSSE();
 })();
 </script>

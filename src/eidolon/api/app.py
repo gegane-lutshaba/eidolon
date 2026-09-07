@@ -410,6 +410,24 @@ def api_compliance_summary(request: Request, days: int = 30) -> dict:
     return {k: v for k, v in report.items() if k != "attestations"}  # lighter
 
 
+@app.get("/api/governance/summary")
+def api_governance_summary(request: Request, days: int = 30) -> dict:
+    """Readable governance posture for the active org over a window: in-scope vs
+    held vs denied, data-exfiltration attempts blocked, per agent + action class."""
+    import datetime as _dt
+
+    from eidolon.api import compliance
+
+    _user, org_id = _req_org(request, "auditor")
+    sf = _live_store()
+    days = max(1, min(int(days), 3650))
+    until = _dt.datetime.now(_dt.UTC)
+    since = until - _dt.timedelta(days=days)
+    summary = compliance.governance_summary(
+        sf, agent_ids=accounts_svc.owned_gateway_ids(sf, org_id), since=since, until=until)
+    return {"days": days, **summary}
+
+
 @app.get("/api/compliance/report.json")
 def api_compliance_report(request: Request, days: int = 30) -> Response:
     from eidolon.common.canonical import canonical_json
