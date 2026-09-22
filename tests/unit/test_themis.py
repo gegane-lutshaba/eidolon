@@ -177,3 +177,42 @@ def test_action_touching_exclusion_denied(principal, twin) -> None:
     root = themis.mint(principal.signing_key_hex, _root_params(principal.public_key_hex, twin.public_key_hex))
     res = themis.verify(_action(cls="draft-comm", exclusions=["financial-commitment"]), [root])
     assert not res.valid
+
+
+# -- trust anchor --------------------------------------------------------------
+# Signatures prove a chain is internally consistent, not whose authority it is:
+# a root self-signed by a fresh key is well-formed. Authority must be anchored.
+
+
+def test_verify_rejects_chain_not_rooted_in_expected_principal(principal, twin) -> None:
+    themis = Themis()
+    rogue = crypto.generate_keypair()
+    forged = themis.mint(rogue.signing_key_hex, _root_params(rogue.public_key_hex, twin.public_key_hex))
+    assert themis.verify(_action(), [forged]).valid  # well-formed on its own
+    res = themis.verify(_action(), [forged], principal_id=principal.public_key_hex)
+    assert not res.valid
+    assert "acting principal" in res.reason
+
+
+def test_verify_accepts_chain_rooted_in_expected_principal(principal, twin) -> None:
+    themis = Themis()
+    root = themis.mint(principal.signing_key_hex, _root_params(principal.public_key_hex, twin.public_key_hex))
+    child = themis.attenuate(
+        root,
+        _root_params(principal.public_key_hex, crypto.generate_keypair().public_key_hex,
+                     scope={"project": ["atlas"]}, permitted_classes=["answer-status"], nonce="c"),
+        twin.signing_key_hex,
+    )
+    assert themis.verify(_action(), [root, child], principal_id=principal.public_key_hex).valid
+
+
+def test_trusted_principals_pin_the_roots(principal, twin) -> None:
+    themis = Themis(trusted_principals=[principal.public_key_hex])
+    ok = themis.mint(principal.signing_key_hex, _root_params(principal.public_key_hex, twin.public_key_hex))
+    assert themis.verify(_action(), [ok]).valid
+
+    rogue = crypto.generate_keypair()
+    forged = themis.mint(rogue.signing_key_hex, _root_params(rogue.public_key_hex, twin.public_key_hex))
+    res = themis.verify(_action(), [forged], principal_id=rogue.public_key_hex)
+    assert not res.valid
+    assert "trusted principal" in res.reason

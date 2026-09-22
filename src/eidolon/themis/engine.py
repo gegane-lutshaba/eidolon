@@ -1,13 +1,20 @@
 """THEMIS engine (PRD §6.3).
 
     mint(issuer_priv, params) -> Delegation
-    verify(action, chain)     -> CredResult{valid, reason, effective}   # walks to root
+    verify(action, chain, principal_id=None)
+                              -> CredResult{valid, reason, effective}   # walks to root
     attenuate(parent, subset, issuer_priv) -> Delegation                # subset-only
     revoke(delegation_id)     -> None                                   # immediate
     heartbeat(principal_id)   -> None                                   # resets dead-man
 
 Fail-closed everywhere: any broken signature, broken linkage, expired window,
-revocation, or dead-man lapse yields ``valid=False``. Authority never widens —
+revocation, or dead-man lapse yields ``valid=False``.
+
+Trust anchor: signatures alone only prove a chain is *internally* consistent —
+a root self-signed by any fresh key verifies. Authority must also be anchored:
+``verify`` rejects a chain whose root principal is not the expected
+``principal_id`` (the principal the action is attributed to), and a Themis
+built with ``trusted_principals`` rejects any root outside that set. Authority never widens —
 :meth:`attenuate` rejects any child that broadens scope, classes, window,
 autonomy, exclusions, or budget on any dimension.
 """
@@ -15,7 +22,7 @@ autonomy, exclusions, or budget on any dimension.
 from __future__ import annotations
 
 import datetime as _dt
-from collections.abc import Callable
+from collections.abc import Callable, Iterable
 
 from eidolon.common import crypto
 from eidolon.common.canonical import canonical_bytes
@@ -43,9 +50,13 @@ class Themis:
         *,
         heartbeat_ttl_seconds: int = 3600,
         clock: Callable[[], _dt.datetime] = _default_clock,
+        trusted_principals: Iterable[str] | None = None,
     ) -> None:
         self._clock = clock
         self._store = store or RevocationStore(heartbeat_ttl_seconds, clock)
+        # None = any principal may root a chain (the caller binds the expected
+        # principal per verify); a set pins the roots this instance honours.
+        self._trusted = frozenset(trusted_principals) if trusted_principals is not None else None
 
     # -- mint -------------------------------------------------------------
     def mint(self, issuer_priv_hex: str, params: MintParams) -> Delegation:
@@ -141,8 +152,17 @@ class Themis:
             raise AttenuationError("scope_expansion budget must be 0")
 
     # -- verify -----------------------------------------------------------
-    def verify(self, action: Action | None, chain: list[Delegation]) -> CredResult:
-        """Walk the chain to root and check authority. Fails closed."""
+    def verify(
+        self,
+        action: Action | None,
+        chain: list[Delegation],
+        principal_id: str | None = None,
+    ) -> CredResult:
+        """Walk the chain to root and check authority. Fails closed.
+
+        ``principal_id`` binds the chain to the principal the action is
+        attributed to: a chain rooted in any other principal is invalid.
+        """
         if not chain:
             return CredResult(valid=False, reason="empty chain")
 
@@ -150,6 +170,12 @@ class Themis:
         ordered = self._order_chain(chain)
         if ordered is None:
             return CredResult(valid=False, reason="broken chain linkage")
+
+        root_principal = ordered[0].body.principal_id
+        if principal_id is not None and root_principal != principal_id:
+            return CredResult(valid=False, reason="chain is not rooted in the acting principal")
+        if self._trusted is not None and root_principal not in self._trusted:
+            return CredResult(valid=False, reason="chain root is not a trusted principal")
 
         now = self._clock()
         for i, deleg in enumerate(ordered):

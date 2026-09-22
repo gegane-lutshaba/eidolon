@@ -49,6 +49,15 @@ class Settings(BaseSettings):
 
     # --- THEMIS dead-man's-switch ----------------------------------------
     heartbeat_ttl_seconds: int = Field(default=3600, ge=1)
+    # Optional comma-separated principal pubkeys (hex) allowed to root a
+    # delegation chain. Unset = any principal, but a chain must still be
+    # rooted in the principal each action is attributed to.
+    trusted_principals: str | None = None
+
+    def trusted_principal_ids(self) -> list[str] | None:
+        if not self.trusted_principals:
+            return None
+        return [p.strip() for p in self.trusted_principals.split(",") if p.strip()]
 
     # --- BASANOS integrity gating (v2) -----------------------------------
     # When true, an autonomy level above 'draft' also requires a passing

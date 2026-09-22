@@ -67,7 +67,7 @@ class Kairos:
         certificates = certificates or []
 
         # -- Step 1: authority (independent of memory content) ------------
-        cred = self._themis.verify(action, chain)
+        cred = self._themis.verify(action, chain, context.principal_id)
         if not cred.valid:
             return self._finalize(
                 DecisionLevel.DENY,
@@ -183,7 +183,7 @@ class Kairos:
                 DecisionLevel.DENY, "approval invalid, expired, or not for this action",
                 action, context, chain, judgment=None, would_have_escalated=False,
             )
-        cred = self._themis.verify(action, chain)
+        cred = self._themis.verify(action, chain, context.principal_id)
         if not cred.valid:
             return self._finalize(
                 DecisionLevel.DENY, f"authority denied despite approval: {cred.reason}",

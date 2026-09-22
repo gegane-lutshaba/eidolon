@@ -89,7 +89,8 @@ def build_engine(
     for content in config.seed_memories:
         sage.observe(principal_pub, content, "memory", "gateway.policy")
 
-    themis = Themis()
+    # The gateway holds exactly one authority: pin it as the only trust anchor.
+    themis = Themis(trusted_principals=[principal_pub])
     ethos = Ethos(sage, style=style, profile=profile, embedder=HashingEmbedder())
     kairos = Kairos(themis=themis, ethos=ethos, basanos=Basanos(), horkos=Horkos(sage),
                     sage=sage, profile=profile, settings=settings, budget=BudgetLedger())

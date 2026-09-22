@@ -50,9 +50,15 @@ def build_runtime(
     if settings.sage_backend == "postgres":
         from eidolon.themis.revocation_store import PostgresRevocationStore
 
-        themis = Themis(store=PostgresRevocationStore(settings.heartbeat_ttl_seconds))
+        themis = Themis(
+            store=PostgresRevocationStore(settings.heartbeat_ttl_seconds),
+            trusted_principals=settings.trusted_principal_ids(),
+        )
     else:
-        themis = Themis(heartbeat_ttl_seconds=settings.heartbeat_ttl_seconds)
+        themis = Themis(
+            heartbeat_ttl_seconds=settings.heartbeat_ttl_seconds,
+            trusted_principals=settings.trusted_principal_ids(),
+        )
     style = ClaudeStyleEngine(settings) if settings.style_enabled else None
     ethos = Ethos(sage, style=style, profile=profile)
     basanos = Basanos()

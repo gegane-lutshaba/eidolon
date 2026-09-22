@@ -245,3 +245,22 @@ def test_one_attestation_per_outcome_and_replayable(profile, principal, twin) ->
     assert classes == {"answer-status", "commit-action"}
     # the escalation was recorded as such
     assert any(r.would_have_escalated for r in replayed)
+
+
+def test_chain_from_another_principal_is_denied_and_attested(profile, principal, twin) -> None:
+    """An action attributed to one principal cannot run on authority minted by
+    another key, even a well-formed chain granting everything."""
+    sage = InMemorySagePort()
+    _seed_strong(sage, principal.public_key_hex)
+    themis, kairos = _build(sage, profile)
+    rogue = crypto.generate_keypair()
+    forged = _root(themis, rogue, twin)
+    action = Action(id="a", action_class="answer-status",
+                    description="answer atlas status friday on track weekly",
+                    scope=Scope(selectors={"project": ["atlas"]}))
+    ctx = Context(principal_id=principal.public_key_hex, query="atlas status friday on track weekly")
+    d = kairos.resolve(action, ctx, [forged], _certs_all_autonomous(profile))
+    assert d.level == DecisionLevel.DENY
+    assert "acting principal" in d.rationale
+    assert d.attestation_hash
+    assert sage.replay(ReplayFilter(principal_id=principal.public_key_hex))[-1].autonomy_level == "DENY"
