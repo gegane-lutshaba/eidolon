@@ -34,6 +34,13 @@ _VALUE_PATTERNS = [
     re.compile(r"\b[A-Za-z0-9]{12,}\b"),                             # long token/secret
 ]
 
+# Delimited secrets: API keys usually embed '_' or '-' (Stripe sk_live_...,
+# GitHub ghp_..., OpenAI sk-proj-..., Slack xoxb-...). '_' is a word character,
+# so the plain token pattern above never finds a word boundary inside them.
+# Kept apart because it would also match ordinary snake_case identifiers:
+# a match must be long and mix letters with digits to count as a secret.
+_DELIMITED_TOKEN = re.compile(r"(?<![A-Za-z0-9_-])[A-Za-z0-9][A-Za-z0-9_-]{15,}(?![A-Za-z0-9_-])")
+
 _SENSITIVE_HINTS = ("balance", "iban", "user", "account", "email", "message",
                     "inbox", "file", "transaction", "password", "secret", "contact")
 _EGRESS_PREFIXES = ("send_", "post_", "share_", "publish_", "upload_")
@@ -61,6 +68,10 @@ def extract_values(result: object) -> set[str]:
     out: set[str] = set()
     for pat in _VALUE_PATTERNS:
         out.update(m.group(0) for m in pat.finditer(text))
+    out.update(
+        tok for tok in (m.group(0) for m in _DELIMITED_TOKEN.finditer(text))
+        if any(c.isdigit() for c in tok) and any(c.isalpha() for c in tok)
+    )
     return {v for v in out if len(v) >= 6}
 
 
