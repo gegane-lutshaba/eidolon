@@ -25,6 +25,7 @@ configuration. **Medium** means a real gap with a mitigation or narrow reach.
 | 13 | Low | Packaging | The gate pulls the whole web/DB/LLM stack |
 | 14 | Low | API | `api/app.py` is a 1,500-line module with global singletons |
 | 15 | Low | Hygiene | Stale docstring, untracked TLC traces, no mypy in CI |
+| 16 | Medium | Gateway | `GovernanceEngine` has no approval path for escalated calls |
 
 Fixed while integrating (kept for the record):
 - **Delegation chains were not anchored** (`fix/themis-trust-anchor`). `Themis.verify` accepted
@@ -124,3 +125,15 @@ module-level singletons (`_runtime`, `_escalations`), so it is single-process on
 - `basanos/__init__.py` docstring says the integrity face raises `NotImplementedError`; it is implemented.
 - ~150 untracked `formal/*TTrace*` files from TLC runs: add them to `.gitignore`.
 - mypy is configured (`strict = false`) but not run in CI.
+
+## 16. `GovernanceEngine` has no approval path (Medium)
+`gateway/engine.py` `GovernanceEngine.decide` returns `ESCALATE` but offers no way to re-resolve
+the same call under a signed approval. `Kairos.resolve_with_approval` needs the exact `Action` and
+`Context` that `decide` built internally, and those include the dynamic exclusions from taint,
+purpose and org policy. 1337 Factory rebuilds them by mirroring `decide`'s private logic
+(`factory/governance/approvals.py`), reading `_policies`, `_taint`, `_purpose`, `_org_policy`,
+`_kairos` and `_chain`. Any change to `decide` silently desynchronises that copy, and a stale
+copy could drop a taint exclusion from an approved call. **Direction:**
+`GovernanceEngine.decide_with_approval(tool, arguments, approval)`, or have `decide` return the
+built `Action` so callers can sign and resolve it without reimplementing the construction.
+
