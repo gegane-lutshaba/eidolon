@@ -26,6 +26,7 @@ configuration. **Medium** means a real gap with a mitigation or narrow reach.
 | 14 | Low | API | `api/app.py` is a 1,500-line module with global singletons |
 | 15 | Low | Hygiene | Stale docstring, untracked TLC traces, no mypy in CI |
 | 16 | Medium | Gateway | `GovernanceEngine` has no approval path for escalated calls |
+| 17 | Medium | ETHOS | Fidelity depends on argument wording: verbose calls drop to DRAFT |
 
 Fixed while integrating (kept for the record):
 - **Delegation chains were not anchored** (`fix/themis-trust-anchor`). `Themis.verify` accepted
@@ -136,4 +137,18 @@ purpose and org policy. 1337 Factory rebuilds them by mirroring `decide`'s priva
 copy could drop a taint exclusion from an approved call. **Direction:**
 `GovernanceEngine.decide_with_approval(tool, arguments, approval)`, or have `decide` return the
 built `Action` so callers can sign and resolve it without reimplementing the construction.
+
+## 17. Fidelity depends on argument wording (Medium)
+ETHOS evidence strength (`ethos/judgment/engine.py` `_evidence_strength`) is a sum of lexical
+Dice scores between the call's query (`call tool X with <argument summary>`) and recalled
+memories, with fixed thresholds (`_STRONG_EVIDENCE = 1.5`, `_SOME_EVIDENCE = 0.6`). Dice shrinks
+as the query gains distinct tokens, so the *same* in-grant tool can act or drop to DRAFT (which
+doesn't act) depending on how wordy its arguments are. Measured from 1337 Factory:
+`Read`/`Write`/`Edit`/`Bash` with realistic arguments stay strong, but an Agent SDK
+`StructuredOutput` call carrying a full multi-field answer lands on DRAFT, so the agent's final
+answer is silently refused. The factory works around it by seeding field-aware precedent
+(`FactoryAuthority.seed_structured_output`). **Direction:** for capability-governed profiles
+(e.g. coding-agent), ground fidelity in the action class and target rather than the free-text
+argument summary, or normalise Dice by the memory side only, so argument verbosity can't flip a
+decision.
 
