@@ -588,18 +588,12 @@ name = "eidolon"
 version = "0.1.0"
 source = { editable = "." }
 dependencies = [
-    { name = "anthropic" },
     { name = "cryptography" },
-    { name = "fastapi" },
     { name = "httpx" },
-    { name = "pgvector" },
-    { name = "psycopg", extra = ["binary"] },
     { name = "pydantic" },
     { name = "pydantic-settings" },
     { name = "pynacl" },
     { name = "pyyaml" },
-    { name = "sqlalchemy" },
-    { name = "uvicorn", extra = ["standard"] },
 ]
 
 [package.optional-dependencies]
@@ -617,12 +611,34 @@ eval = [
 mcp = [
     { name = "mcp" },
 ]
+platform = [
+    { name = "anthropic" },
+    { name = "fastapi" },
+    { name = "pgvector" },
+    { name = "psycopg", extra = ["binary"] },
+    { name = "sqlalchemy" },
+    { name = "uvicorn", extra = ["standard"] },
+]
+postgres = [
+    { name = "pgvector" },
+    { name = "psycopg", extra = ["binary"] },
+    { name = "sqlalchemy" },
+]
 sage = [
     { name = "sage-agent-sdk" },
+]
+server = [
+    { name = "fastapi" },
+    { name = "sqlalchemy" },
+    { name = "uvicorn", extra = ["standard"] },
+]
+style = [
+    { name = "anthropic" },
 ]
 
 [package.dev-dependencies]
 dev = [
+    { name = "eidolon", extra = ["platform"] },
     { name = "hypothesis" },
     { name = "mypy" },
     { name = "pytest" },
@@ -633,29 +649,32 @@ dev = [
 [package.metadata]
 requires-dist = [
     { name = "agentdojo", marker = "extra == 'eval'", specifier = ">=0.1.35" },
-    { name = "anthropic", specifier = ">=0.40" },
+    { name = "anthropic", marker = "extra == 'style'", specifier = ">=0.40" },
     { name = "biscuit-python", marker = "extra == 'biscuit'", specifier = ">=0.4" },
     { name = "cryptography", specifier = ">=42.0" },
-    { name = "fastapi", specifier = ">=0.111" },
+    { name = "eidolon", extras = ["server", "postgres", "style"], marker = "extra == 'platform'" },
+    { name = "fastapi", marker = "extra == 'server'", specifier = ">=0.111" },
     { name = "httpx", specifier = ">=0.27" },
     { name = "markdown", marker = "extra == 'docs'", specifier = ">=3.5" },
     { name = "mcp", marker = "extra == 'mcp'", specifier = ">=1.0" },
-    { name = "pgvector", specifier = ">=0.3" },
+    { name = "pgvector", marker = "extra == 'postgres'", specifier = ">=0.3" },
     { name = "playwright", marker = "extra == 'docs'", specifier = ">=1.40" },
-    { name = "psycopg", extras = ["binary"], specifier = ">=3.2" },
+    { name = "psycopg", extras = ["binary"], marker = "extra == 'postgres'", specifier = ">=3.2" },
     { name = "pydantic", specifier = ">=2.7" },
     { name = "pydantic-settings", specifier = ">=2.3" },
     { name = "pygments", marker = "extra == 'docs'", specifier = ">=2.17" },
     { name = "pynacl", specifier = ">=1.5" },
     { name = "pyyaml", specifier = ">=6.0" },
     { name = "sage-agent-sdk", marker = "extra == 'sage'", specifier = ">=7.0" },
-    { name = "sqlalchemy", specifier = ">=2.0" },
-    { name = "uvicorn", extras = ["standard"], specifier = ">=0.30" },
+    { name = "sqlalchemy", marker = "extra == 'postgres'", specifier = ">=2.0" },
+    { name = "sqlalchemy", marker = "extra == 'server'", specifier = ">=2.0" },
+    { name = "uvicorn", extras = ["standard"], marker = "extra == 'server'", specifier = ">=0.30" },
 ]
-provides-extras = ["sage", "mcp", "eval", "biscuit", "docs"]
+provides-extras = ["server", "postgres", "style", "platform", "sage", "mcp", "eval", "biscuit", "docs"]
 
 [package.metadata.requires-dev]
 dev = [
+    { name = "eidolon", extras = ["platform"] },
     { name = "hypothesis", specifier = ">=6.100" },
     { name = "mypy", specifier = ">=1.10" },
     { name = "pytest", specifier = ">=8.2" },

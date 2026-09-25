@@ -20,9 +20,9 @@ configuration. **Medium** means a real gap with a mitigation or narrow reach.
 | 8 | Medium | Taint | Plain long-token pattern taints ordinary long words |
 | 9 | Low | HORKOS | `Attestation` has no field to correlate with a caller's session |
 | 10 | Low | Gateway | Destructive-shell classifier is private to `eidolon.api` |
-| 11 | Low | Config | `Settings()` silently reads `.env` from the current directory |
+| 11 | Low | Config | ~~`Settings()` silently reads `.env` from the current directory~~ (fixed) |
 | 12 | Low | ETHOS | Embedders must seed precedent or routine actions escalate (undocumented) |
-| 13 | Low | Packaging | The gate pulls the whole web/DB/LLM stack |
+| 13 | Low | Packaging | ~~The gate pulls the whole web/DB/LLM stack~~ (fixed) |
 | 14 | Low | API | `api/app.py` is a 1,500-line module with global singletons |
 | 15 | Low | Hygiene | Stale docstring, untracked TLC traces, no mypy in CI |
 | 16 | Medium | Gateway | `GovernanceEngine` has no approval path for escalated calls |
@@ -36,6 +36,14 @@ Fixed while integrating (kept for the record):
 - **Taint missed delimited API keys** (`fix/taint-underscore-secrets`). Secrets containing `_`
   (Stripe `sk_live_…`, GitHub `ghp_…`) never matched `\b[A-Za-z0-9]{12,}\b`. A second,
   letters-and-digits pattern now captures them.
+- **#11, `.env` read from the current directory** (`fix/library-settings-and-extras`). `Settings`
+  reads the process environment only. The platform server opts in to `.env` when `eidolon.api`
+  is imported (`use_env_file()`), and anyone can name a file with `EIDOLON_ENV_FILE`.
+- **#13, the gate pulled the whole stack** (`fix/library-settings-and-extras`). The core install
+  is what an embedded gate needs (pydantic, cryptography, PyNaCl, PyYAML, httpx). FastAPI,
+  uvicorn and SQLAlchemy moved to `[server]`; SQLAlchemy, pgvector and psycopg to `[postgres]`;
+  anthropic to `[style]`; `[platform]` installs all three. The Docker image and CI install
+  `[platform]`. A core-only install imports every module 1337 Factory uses.
 
 ---
 
@@ -101,7 +109,7 @@ through `Context`.
 consumers copy the list. **Direction:** move it to `eidolon.gateway` (e.g.
 `gateway/coding.py`) with the native tool map.
 
-## 11. `Settings()` reads `.env` from the CWD (Low)
+## 11. `Settings()` reads `.env` from the CWD (Low) — fixed
 `config.py` sets `env_file=".env"`. An application embedding EIDOLON inherits whatever `.env`
 sits in its working directory. **Direction:** only read `.env` in the server entrypoints.
 Library construction should take explicit settings (consumers currently pass `_env_file=None`).
@@ -112,7 +120,7 @@ escalate. Embedders must seed short tool-echoing memories, as `api/coding_agent.
 does, but this is undocumented. **Direction:** document it, or let a profile declare baseline
 precedent per class.
 
-## 13. Packaging: the gate pulls the whole stack (Low)
+## 13. Packaging: the gate pulls the whole stack (Low) — fixed
 Core dependencies include `fastapi`, `uvicorn[standard]`, `sqlalchemy`, `psycopg`, `pgvector`
 and `anthropic`, although THEMIS/KAIROS/HORKOS and the gateway engine need none of them.
 **Direction:** an `eidolon-core` distribution (or `[server]`, `[postgres]`, `[style]` extras).

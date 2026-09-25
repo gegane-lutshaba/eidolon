@@ -16,7 +16,7 @@ jobs:
         with:
           enable-cache: true
       - name: Sync (with mcp + biscuit extras)
-        run: uv sync --group dev --extra mcp --extra biscuit
+        run: uv sync --group dev --extra platform --extra mcp --extra biscuit
       - name: Lint
         run: uv run ruff check src tests
       - name: Tests (fast lane)

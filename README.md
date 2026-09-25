@@ -97,7 +97,7 @@ same feed. Full copy-paste steps:
 [uv](https://docs.astral.sh/uv/):
 
 ```bash
-uvx --from git+https://github.com/gegane-lutshaba/eidolon eidolon-gateway \
+uvx --from "eidolon[mcp] @ git+https://github.com/gegane-lutshaba/eidolon" eidolon-gateway \
   --config gateway.yaml -- npx -y @modelcontextprotocol/server-filesystem .
 ```
 

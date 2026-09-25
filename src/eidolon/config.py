@@ -2,10 +2,16 @@
 
 All knobs are environment-driven so the same code runs in the fast (in-memory)
 test lane and against a live Dockerized SAGE node. See ``.env.example``.
+
+Only the platform server reads a ``.env`` file (``use_env_file``, called when
+``eidolon.api`` is imported), or whoever sets ``EIDOLON_ENV_FILE``. A library embedding
+EIDOLON (a gate in someone else's repository) must never pick up settings from
+whatever ``.env`` sits in its working directory (known-issues #11).
 """
 
 from __future__ import annotations
 
+import os
 from functools import lru_cache
 from typing import Literal
 
@@ -16,7 +22,7 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(
         env_prefix="EIDOLON_",
-        env_file=".env",
+        env_file=None,  # the process environment only; see use_env_file
         env_file_encoding="utf-8",
         extra="ignore",
     )
@@ -137,6 +143,17 @@ class Settings(BaseSettings):
     slack_webhook_url: str | None = None
 
 
+ENV_FILE_VAR = "EIDOLON_ENV_FILE"
+
+
 @lru_cache
 def get_settings() -> Settings:
-    return Settings()
+    """Settings from the environment, plus the file named by ``EIDOLON_ENV_FILE`` if set."""
+    return Settings(_env_file=os.environ.get(ENV_FILE_VAR) or None)
+
+
+def use_env_file(path: str = ".env") -> None:
+    """For server entrypoints: also read settings from ``path`` (unless ``EIDOLON_ENV_FILE``
+    already names a file). Libraries never call this."""
+    os.environ.setdefault(ENV_FILE_VAR, path)
+    get_settings.cache_clear()

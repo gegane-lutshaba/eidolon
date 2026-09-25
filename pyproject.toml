@@ -7,17 +7,15 @@ requires-python = ">=3.12"
 license = { text = "Apache-2.0" }
 authors = [{ name = "Gegane" }]
 
+# The core is what an embedded gate needs (THEMIS, KAIROS, HORKOS, ETHOS, the gateway
+# engine). The platform server, Postgres and the Claude style engine are extras
+# (known-issues #13): `eidolon[server]`, `eidolon[postgres]`, `eidolon[style]`,
+# or `eidolon[platform]` for all three.
 dependencies = [
     "pydantic>=2.7",
     "pydantic-settings>=2.3",
-    "fastapi>=0.111",
-    "uvicorn[standard]>=0.30",
     "cryptography>=42.0",
     "pynacl>=1.5",
-    "anthropic>=0.40",
-    "sqlalchemy>=2.0",
-    "pgvector>=0.3",
-    "psycopg[binary]>=3.2",
     "pyyaml>=6.0",
     "httpx>=0.27",
 ]
@@ -27,6 +25,10 @@ eidolon-gateway = "eidolon.gateway.__main__:main"
 eidolon-wrap = "eidolon.wrap:main"
 
 [project.optional-dependencies]
+server = ["fastapi>=0.111", "uvicorn[standard]>=0.30", "sqlalchemy>=2.0"]
+postgres = ["sqlalchemy>=2.0", "pgvector>=0.3", "psycopg[binary]>=3.2"]
+style = ["anthropic>=0.40"]
+platform = ["eidolon[server,postgres,style]"]
 # SAGE Python SDK. The exact distribution name is bound at install time; see
 # src/eidolon/sage/client_adapter.py. Kept optional so the fast (in-memory)
 # test lane needs no live node.
@@ -38,6 +40,7 @@ docs = ["playwright>=1.40", "markdown>=3.5", "pygments>=2.17"]
 
 [dependency-groups]
 dev = [
+    "eidolon[platform]",
     "pytest>=8.2",
     "pytest-asyncio>=0.23",
     "hypothesis>=6.100",

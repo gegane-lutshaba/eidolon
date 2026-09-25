@@ -37,7 +37,7 @@ COPY docs/whitepaper.md ./docs/whitepaper.md
 
 # Resolve and install into /app/.venv. No dev deps; mcp powers the hosted
 # /mcp gateway tier (managed access).
-RUN uv sync --frozen --no-dev --extra mcp
+RUN uv sync --frozen --no-dev --extra platform --extra mcp
 
 COPY docker/entrypoint.sh /entrypoint.sh
 RUN chmod +x /entrypoint.sh
