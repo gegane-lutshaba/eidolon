@@ -26,13 +26,19 @@ from collections.abc import Callable
 # Marker exclusion produced when a sensitive value flows to an egress sink.
 DATA_EXFILTRATION = "data-exfiltration"
 
-# Candidate sensitive values: emails, IBAN-like, long digit runs, long tokens.
+# Candidate sensitive values: emails, IBAN-like, long digit runs.
 _VALUE_PATTERNS = [
     re.compile(r"[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}"),   # email
     re.compile(r"\b[A-Z]{2}\d{2}[A-Z0-9]{10,30}\b"),                  # IBAN-ish
     re.compile(r"\b\d{6,}\b"),                                        # long number
-    re.compile(r"\b[A-Za-z0-9]{12,}\b"),                             # long token/secret
 ]
+
+# Long undelimited tokens (hex keys, base62 secrets). A token only counts when it mixes
+# letters and digits: ordinary words and identifiers (`verification`, `FactoryConfig`,
+# a user name in a path) are all letters, and tainting them made a coding agent's routine
+# shell commands look like exfiltration once it had read any code (known-issues #8).
+# A random base62 secret of 12+ characters almost always contains a digit.
+_PLAIN_TOKEN = re.compile(r"\b[A-Za-z0-9]{12,}\b")
 
 # Delimited secrets: API keys usually embed '_' or '-' (Stripe sk_live_...,
 # GitHub ghp_..., OpenAI sk-proj-..., Slack xoxb-...). '_' is a word character,
@@ -68,11 +74,14 @@ def extract_values(result: object) -> set[str]:
     out: set[str] = set()
     for pat in _VALUE_PATTERNS:
         out.update(m.group(0) for m in pat.finditer(text))
-    out.update(
-        tok for tok in (m.group(0) for m in _DELIMITED_TOKEN.finditer(text))
-        if any(c.isdigit() for c in tok) and any(c.isalpha() for c in tok)
-    )
+    for pat in (_PLAIN_TOKEN, _DELIMITED_TOKEN):
+        out.update(tok for tok in (m.group(0) for m in pat.finditer(text)) if _mixed(tok))
     return {v for v in out if len(v) >= 6}
+
+
+def _mixed(token: str) -> bool:
+    """Letters and digits together: a secret's shape, not a word's."""
+    return any(c.isdigit() for c in token) and any(c.isalpha() for c in token)
 
 
 class TaintTracker:

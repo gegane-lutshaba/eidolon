@@ -17,7 +17,7 @@ configuration. **Medium** means a real gap with a mitigation or narrow reach.
 | 5 | Medium | THEMIS | Revocations and heartbeats are in-memory unless on Postgres |
 | 6 | Medium | KAIROS | `BudgetLedger` has no window and no persistence |
 | 7 | Medium | THEMIS | Scopes are exact-value sets; no hierarchical path prefixes |
-| 8 | Medium | Taint | Plain long-token pattern taints ordinary long words |
+| 8 | Medium | Taint | ~~Plain long-token pattern taints ordinary long words~~ (fixed) |
 | 9 | Low | HORKOS | `Attestation` has no field to correlate with a caller's session |
 | 10 | Low | Gateway | Destructive-shell classifier is private to `eidolon.api` |
 | 11 | Low | Config | ~~`Settings()` silently reads `.env` from the current directory~~ (fixed) |
@@ -39,6 +39,10 @@ Fixed while integrating (kept for the record):
 - **#11, `.env` read from the current directory** (`fix/library-settings-and-extras`). `Settings`
   reads the process environment only. The platform server opts in to `.env` when `eidolon.api`
   is imported (`use_env_file()`), and anyone can name a file with `EIDOLON_ENV_FILE`.
+- **#8, taint false positives on long words** (`fix/taint-long-words`). A plain 12+ character
+  token counts as a secret only when it mixes letters and digits, as delimited tokens already
+  did. Found in 1337 Factory's pilot: after reading any code, a coding agent's routine `grep`s
+  were denied as exfiltration because words like `verification` and `FactoryConfig` were tainted.
 - **#13, the gate pulled the whole stack** (`fix/library-settings-and-extras`). The core install
   is what an embedded gate needs (pydantic, cryptography, PyNaCl, PyYAML, httpx). FastAPI,
   uvicorn and SQLAlchemy moved to `[server]`; SQLAlchemy, pgvector and psycopg to `[postgres]`;
@@ -91,7 +95,7 @@ A grant of `path: ["src"]` cannot authorise `src/a.py`, and attenuation cannot n
 e.g. `path` with prefix-containment semantics for both authorisation and subset checks,
 normalised and symlink-safe.
 
-## 8. Taint false positives on long words (Medium)
+## 8. Taint false positives on long words (Medium) — fixed
 `gateway/taint.py` `\b[A-Za-z0-9]{12,}\b` taints any 12+ letter word in a sensitive read
 (`configuration`, `Authorization`). A later egress call containing that word is denied as
 exfiltration. **Direction:** require character-class mixing or an entropy threshold, as the
