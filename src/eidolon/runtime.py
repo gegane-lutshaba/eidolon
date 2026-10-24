@@ -62,23 +62,39 @@ def build_runtime(
 
     # On the postgres backend, revocations + heartbeats persist in the
     # operational store: a restart never resurrects revoked authority.
+    window = settings.budget_window_seconds
     if settings.sage_backend == "postgres":
+        from eidolon.kairos.types import PostgresBudgetLedger
         from eidolon.themis.revocation_store import PostgresRevocationStore
 
         themis = Themis(
             store=PostgresRevocationStore(settings.heartbeat_ttl_seconds),
             trusted_principals=settings.trusted_principal_ids(),
         )
+        budget: BudgetLedger = PostgresBudgetLedger(window)
+    elif settings.state_path:
+        # No Postgres, but a durable state file: revocations, heartbeats and
+        # budgets survive restarts and are shared by every process on the box.
+        from eidolon.common.state_db import StateDB
+        from eidolon.kairos.types import SqliteBudgetLedger
+        from eidolon.themis.revocation_store import SqliteRevocationStore
+
+        db = StateDB(settings.state_path)
+        themis = Themis(
+            store=SqliteRevocationStore(db, settings.heartbeat_ttl_seconds),
+            trusted_principals=settings.trusted_principal_ids(),
+        )
+        budget = SqliteBudgetLedger(db, window)
     else:
         themis = Themis(
             heartbeat_ttl_seconds=settings.heartbeat_ttl_seconds,
             trusted_principals=settings.trusted_principal_ids(),
         )
+        budget = BudgetLedger(window)
     style = ClaudeStyleEngine(settings) if settings.style_enabled else None
     ethos = Ethos(sage, style=style, profile=profile)
     basanos = Basanos()
     horkos = Horkos(sage)
-    budget = BudgetLedger()
     kairos = Kairos(
         themis=themis,
         ethos=ethos,

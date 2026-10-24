@@ -55,6 +55,12 @@ class Settings(BaseSettings):
 
     # --- THEMIS dead-man's-switch ----------------------------------------
     heartbeat_ttl_seconds: int = Field(default=3600, ge=1)
+    # Rolling window for *_per_window budget dimensions (posts, egress…).
+    budget_window_seconds: int = Field(default=3600, ge=1)
+    # Durable local state (revocations, heartbeats, budget) for single-box
+    # deployments without Postgres. Shared by every process using the same file.
+    # Ignored on the postgres backend, which keeps them in the operational store.
+    state_path: str | None = None
     # Optional comma-separated principal pubkeys (hex) allowed to root a
     # delegation chain. Unset = any principal, but a chain must still be
     # rooted in the principal each action is attributed to.
