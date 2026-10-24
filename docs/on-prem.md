@@ -21,14 +21,20 @@ docker run -d --name eidolon -p 8000:8000 \
   ghcr.io/gegane-lutshaba/eidolon:latest
 ```
 
-Open `http://localhost:8000`, sign up, enroll an agent. Before exposing it to
-anyone else, set an admin token:
+Open `http://localhost:8000`, sign up, enroll an agent. The container is
+**secure by default**: with no `EIDOLON_ADMIN_TOKEN`, it generates one on first
+boot, saves it in the `/data` volume, and prints it — read it with
+`docker logs eidolon | grep "admin token"` and use it at `/login` for the operator
+console. To choose your own:
 
 ```bash
 docker run -d --name eidolon -p 8000:8000 -v eidolon-data:/data \
   -e EIDOLON_ADMIN_TOKEN="$(openssl rand -hex 32)" \
   ghcr.io/gegane-lutshaba/eidolon:latest
 ```
+
+(A token-less server outside Docker admits only loopback callers;
+`EIDOLON_OPEN_MODE=1` opens it to the network for demos.)
 
 ---
 
@@ -139,7 +145,9 @@ posture** dashboard, and hash-sealed **compliance packs**.
 
 | Var | Default | Purpose |
 |---|---|---|
-| `EIDOLON_ADMIN_TOKEN` | (unset → OPEN, warns) | operator control plane; **set before exposing** |
+| `EIDOLON_ADMIN_TOKEN` | generated on first boot (image) | operator control plane |
+| `EIDOLON_ALLOW_SERVER_SIGNING` | `true` | set `false` in production so private keys never cross HTTP |
+| `EIDOLON_CERTIFICATE_KEY` | random per process | HMAC key for issued certificates; set it for restarts/replicas |
 | `EIDOLON_AUDIT_TOKEN` | (unset) | read-only forensic operator role |
 | `EIDOLON_SAGE_BACKEND` | `memory` (image); `postgres` (compose) | attestation ledger substrate |
 | `EIDOLON_DATABASE_URL` | SQLite in `/data` (image); Postgres (compose) | operational + ledger store |

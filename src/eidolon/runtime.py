@@ -7,9 +7,9 @@ by config (in-memory fake vs live SDK).
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
-from eidolon.basanos import Basanos
+from eidolon.basanos import Basanos, Certificate, CertificateIssuer
 from eidolon.config import Settings, get_settings
 from eidolon.ethos.facade import Ethos
 from eidolon.ethos.style import ClaudeStyleEngine
@@ -33,6 +33,21 @@ class Runtime:
     horkos: Horkos
     kairos: Kairos
     budget: BudgetLedger
+    # Certificates this server issued, by principal -> action class. The API
+    # resolves with these (plus caller-presented ones that verify), never with
+    # bare caller assertions.
+    issuer: CertificateIssuer = field(default_factory=CertificateIssuer)
+    issued: dict[str, dict[str, Certificate]] = field(default_factory=dict)
+
+    def certificates_for(self, principal_id: str, presented: list[Certificate] | None = None
+                         ) -> tuple[list[Certificate], list[str]]:
+        """Effective certificates for a principal: server-issued ones, overlaid
+        with caller-presented certificates that carry a valid issuer signature.
+        Returns (certificates, rejected classes)."""
+        accepted, rejected = self.issuer.accept(list(presented or []), principal_id)
+        merged = dict(self.issued.get(principal_id, {}))
+        merged.update({c.action_class: c for c in accepted})
+        return list(merged.values()), rejected
 
 
 def build_runtime(
@@ -84,4 +99,5 @@ def build_runtime(
         horkos=horkos,
         kairos=kairos,
         budget=budget,
+        issuer=CertificateIssuer(settings.certificate_key),
     )

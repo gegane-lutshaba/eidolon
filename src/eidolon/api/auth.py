@@ -15,7 +15,9 @@ by one middleware, rather than sprinkled across endpoints.
 
 Fail-closed in the spirit of default-deny: with any token configured,
 unauthenticated or under-privileged access is rejected. With **no** token
-configured the platform runs OPEN (localhost dev only) and logs one loud warning.
+configured the platform runs OPEN for loopback callers only (localhost dev) and
+logs one loud warning; any other caller is unauthenticated unless
+``EIDOLON_OPEN_MODE=1`` deliberately opens it to the network.
 """
 
 from __future__ import annotations
@@ -69,18 +71,41 @@ def _presented(request: Request) -> str | None:
     return request.cookies.get(SESSION_COOKIE)
 
 
+# TCP peers treated as local in token-less mode. "testclient" is the peer name
+# Starlette's in-process TestClient uses; it cannot arrive over a socket.
+_LOOPBACK = frozenset({"127.0.0.1", "::1", "localhost", "testclient"})
+
+
+def _is_loopback(request: Request) -> bool:
+    """True iff the *socket peer* is local. Deliberately ignores X-Forwarded-For:
+    behind a proxy the service is exposed, so it must not count as local."""
+    host = request.client.host if request.client else ""
+    return host in _LOOPBACK or host.startswith("127.")
+
+
+def open_access(request: Request, settings: Settings | None = None) -> bool:
+    """Token-less mode grants access only to loopback callers, or to everyone
+    when EIDOLON_OPEN_MODE=1 is set on purpose."""
+    settings = settings or get_settings()
+    if auth_enabled(settings):
+        return False
+    global _warned
+    if not _warned:
+        _log.warning(
+            "EIDOLON is running OPEN — no EIDOLON_ADMIN_TOKEN / EIDOLON_AUDIT_TOKEN set. "
+            "Only loopback callers get access%s. Set an admin token before exposing it.",
+            "" if not settings.open_mode else " (EIDOLON_OPEN_MODE=1: EVERY caller is admin)",
+        )
+        _warned = True
+    return settings.open_mode or _is_loopback(request)
+
+
 def current_role(request: Request, settings: Settings | None = None) -> str | None:
-    """The caller's effective role. In open mode (no tokens) everyone is admin."""
+    """The caller's effective role. Token-less: admin for loopback callers (or all
+    callers under EIDOLON_OPEN_MODE=1), otherwise unauthenticated."""
     settings = settings or get_settings()
     if not auth_enabled(settings):
-        global _warned
-        if not _warned:
-            _log.warning(
-                "EIDOLON is running OPEN — no EIDOLON_ADMIN_TOKEN / EIDOLON_AUDIT_TOKEN set. "
-                "Set at least an admin token before exposing this service to a network."
-            )
-            _warned = True
-        return "admin"
+        return "admin" if open_access(request, settings) else None
     return role_for_token(_presented(request), settings)
 
 
@@ -139,12 +164,14 @@ def required_role(method: str, path: str) -> str | None:
     return "admin"
 
 
-def is_valid_gateway_key(candidate: str | None, settings: Settings | None = None) -> bool:
+def is_valid_gateway_key(candidate: str | None, settings: Settings | None = None,
+                         request: Request | None = None) -> bool:
     """Machine credential for event ingest: a configured gateway key, or the
-    admin token. In fully-open dev mode (no tokens at all) ingest is open too."""
+    admin token. Token-less dev mode accepts ingest from loopback callers (or
+    anyone under EIDOLON_OPEN_MODE=1)."""
     settings = settings or get_settings()
     if not auth_enabled(settings) and not settings.gateway_keys:
-        return True  # localhost dev, everything open
+        return settings.open_mode if request is None else open_access(request, settings)
     if candidate is None:
         return False
     keys = [k.strip() for k in (settings.gateway_keys or "").split(",") if k.strip()]

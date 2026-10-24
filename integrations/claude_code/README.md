@@ -107,14 +107,14 @@ curl -s -X POST https://eidolon.onyxcreator.com/gate/evaluate \
 |---|---|---|
 | `EIDOLON_URL` | `https://eidolon.onyxcreator.com` | your deployment (use the on-prem host for org rollouts) |
 | `EIDOLON_AGENT_KEY` | — | the agent's `egk_` key (required) |
-| `EIDOLON_HOOK_STRICT` | unset | `1` = fail **closed** (block) when the gate is unreachable |
+| `EIDOLON_HOOK_STRICT` | `1` | fail **closed**: deny the call when the gate is unreachable, errors, or no key is set. `0` = fail open |
 | `EIDOLON_HOOK_TIMEOUT` | `5` | seconds to wait for a verdict |
 
-By default the hook **fails open** on a network error (an EIDOLON outage never
-freezes a developer). For a hard compliance posture where nothing runs
-un-governed, set `EIDOLON_HOOK_STRICT=1` — and remember the airtight guarantee
-also needs the workstation locked so agents can only reach tools through
-EIDOLON.
+By default the hook **fails closed**: if the gate is unreachable or the key is
+missing, Claude Code is told to deny the call, so a stopped gateway never
+silently switches governance off. For a demo where an outage shouldn't block
+work, set `EIDOLON_HOOK_STRICT=0`. The airtight guarantee also needs the
+workstation locked so agents can only reach tools through EIDOLON.
 
 ## On-prem
 

@@ -65,13 +65,16 @@ def test_mint_resolve_replay_flow(client) -> None:
         "scope": {"selectors": {"project": ["atlas"]}},
     }
     context = {"principal_id": principal.public_key_hex, "query": "atlas status friday on track weekly"}
-    # Twin is certified for answer-status at autonomous (certify-before-empower).
-    certs = [{"action_class": "answer-status", "agreement": 1.0, "calibration": 1.0,
-              "sample_size": 10, "ceiling": "autonomous"}]
-    r = client.post(
-        "/resolve",
-        json={"action": action, "context": context, "chain": [root], "certificates": certs},
-    )
+    # Certify-before-empower: the twin EARNS its certificate server-side against
+    # the principal's held-out decisions (here: they answer this routinely).
+    heldout = [{"action": action, "context": context, "principal_decision": "PROCEED"}] * 6
+    r = client.post("/certify", json={"principal_id": principal.public_key_hex,
+                                      "heldout_decisions": heldout})
+    assert r.status_code == 200, r.text
+    cert = next(c for c in r.json()["certificates"] if c["action_class"] == "answer-status")
+    assert cert["ceiling"] == "autonomous" and cert["issuer_sig"]
+
+    r = client.post("/resolve", json={"action": action, "context": context, "chain": [root]})
     assert r.status_code == 200, r.text
     decision = r.json()
     assert decision["level"] == "AUTONOMOUS_ACT"

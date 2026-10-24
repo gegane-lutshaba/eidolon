@@ -80,9 +80,21 @@ class Settings(BaseSettings):
     #   EIDOLON_ADMIN_TOKEN -> "admin"   : full control plane (mint/revoke, approve…)
     #   EIDOLON_AUDIT_TOKEN -> "auditor" : read-only forensic surface (/audit, /replay)
     # Fail-closed: with either set, unauthenticated/insufficient access is denied.
-    # With NEITHER set the platform runs OPEN (localhost dev only) and warns once.
+    # With NEITHER set the platform runs OPEN, but only for loopback callers:
+    # a request from any other address is treated as unauthenticated unless
+    # EIDOLON_OPEN_MODE=1 explicitly opens it to the network (demos only).
     admin_token: str | None = None
     audit_token: str | None = None
+    open_mode: bool = False
+    # Server-side signing: /keypair, and signing keys in request bodies for
+    # /delegations/mint|attenuate and /escalations/{id}/approve. Keys then cross
+    # HTTP (proxies, logs). Set false in production and use the pre-signed
+    # variants (/delegations/register, approve with a signed `approval`).
+    allow_server_signing: bool = True
+    # HMAC key BASANOS signs issued certificates with. Unset = a random
+    # per-process key (certificates are then valid only in that process); set it
+    # when several processes or restarts must honour the same certificates.
+    certificate_key: str | None = None
     # Mark the session cookie Secure (HTTPS only). Enable behind a TLS proxy.
     session_cookie_secure: bool = False
     # Optional comma-separated Host allow-list (adds TrustedHostMiddleware).

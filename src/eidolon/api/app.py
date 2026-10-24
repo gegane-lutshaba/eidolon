@@ -45,12 +45,13 @@ from eidolon.api.auth import (
     required_role,
     role_for_token,
 )
-from eidolon.basanos.certify import Certificate
+from eidolon.basanos.certify import Certificate, HeldoutDecision
 from eidolon.capture import ConsentGrant, connect, ingest, ingest_all, known_sources
 from eidolon.coaching import Aspiration, Coach
 from eidolon.common import crypto
 from eidolon.common.errors import AttenuationError, EidolonError
 from eidolon.escalation import EscalationQueue
+from eidolon.escalation.types import Approval
 from eidolon.profile import ProfileLoader
 from eidolon.runtime import Runtime, build_runtime
 from eidolon.sage.port import ReplayFilter
@@ -1107,15 +1108,28 @@ def challenge_reset(request: Request) -> dict:
     return {"ok": True}
 
 
+def _require_server_signing() -> None:
+    """Endpoints that move a private key over HTTP are a convenience for dev and
+    demos. With EIDOLON_ALLOW_SERVER_SIGNING=false they are refused; sign
+    client-side and use the pre-signed variants instead."""
+    if not runtime().settings.allow_server_signing:
+        raise HTTPException(
+            status_code=403,
+            detail="server-side signing is disabled (EIDOLON_ALLOW_SERVER_SIGNING=false): "
+                   "sign locally and use /delegations/register or a pre-signed approval")
+
+
 @app.post("/keypair")
 def keypair() -> dict:
-    """Generate an Ed25519 keypair (principal or agent identity)."""
+    """Generate an Ed25519 keypair (dev convenience — the key crosses HTTP)."""
+    _require_server_signing()
     kp = crypto.generate_keypair()
     return {"public_key": kp.public_key_hex, "signing_key": kp.signing_key_hex}
 
 
 @app.post("/delegations/mint")
 def mint(signing_key: str = Body(...), params: MintParams = Body(...)) -> Delegation:
+    _require_server_signing()
     try:
         return runtime().themis.mint(signing_key, params)
     except AttenuationError as exc:
@@ -1128,10 +1142,25 @@ def attenuate(
     subset: MintParams = Body(...),
     signing_key: str = Body(...),
 ) -> Delegation:
+    _require_server_signing()
     try:
         return runtime().themis.attenuate(parent, subset, signing_key)
     except AttenuationError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@app.post("/delegations/register")
+def register_delegation(chain: list[Delegation] = Body(..., embed=True)) -> dict:
+    """Register a chain signed client-side (``Themis.mint`` / ``attenuate`` run
+    locally, so no private key reaches the server). Verifies every signature and
+    link and arms the root principal's dead-man's switch, as server mint does."""
+    rt = runtime()
+    result = rt.themis.verify(None, chain)
+    if not result.valid:
+        raise HTTPException(status_code=400, detail=f"invalid delegation chain: {result.reason}")
+    root = next(d for d in chain if d.body.parent is None)
+    rt.themis.heartbeat(root.body.principal_id)
+    return {"registered": [d.id for d in chain], "principal_id": root.body.principal_id}
 
 
 @app.post("/delegations/revoke")
@@ -1153,14 +1182,19 @@ def resolve(
     chain: list[Delegation] = Body(...),
     certificates: list[Certificate] = Body(default_factory=list),
 ) -> dict:
-    # Certificates would normally be looked up per-twin from the store; the
-    # caller supplies the twin's current fidelity certificates. Absent any, an
+    # Certificates are earned, never asserted: the gate uses the ones this
+    # server issued (POST /certify) plus presented ones with a valid issuer
+    # signature for this principal. Anything else is dropped and reported; an
     # uncertified class is capped at 'observe' and escalates (certify-first).
+    rt = runtime()
+    certificates, rejected = rt.certificates_for(context.principal_id, certificates)
     try:
-        decision = runtime().kairos.resolve(action, context, chain, certificates)
+        decision = rt.kairos.resolve(action, context, chain, certificates)
     except EidolonError as exc:
         raise HTTPException(status_code=409, detail=str(exc)) from exc
     out = decision.model_dump()
+    if rejected:
+        out["certificates_rejected"] = rejected
     # An escalated/drafted decision becomes a pending item in the approval
     # inbox, carrying the chain + certificates so an approval can re-execute.
     if decision.level.value in ("ESCALATE", "DRAFT"):
@@ -1176,6 +1210,27 @@ def resolve(
     return out
 
 
+@app.post("/certify")
+def certify(principal_id: str = Body(...),
+            heldout_decisions: list[HeldoutDecision] = Body(...)) -> dict:
+    """Run BASANOS fidelity certification server-side against the principal's
+    held-out real decisions. The resulting certificates are signed, stored for
+    the principal, and returned (presentable to /resolve, bound to this
+    principal). This is the only way the API raises an autonomy ceiling."""
+    rt = runtime()
+
+    def twin(action: Action, context: Context):
+        memories = rt.sage.recall(context.principal_id, action.scope,
+                                  context.query or action.description, 8)
+        return rt.ethos.evaluate(action, context, memories, rt.profile)
+
+    certs = rt.basanos.certify_fidelity(twin, heldout_decisions, rt.profile)
+    signed = [rt.issuer.sign(c, principal_id) for c in certs]
+    rt.issued.setdefault(principal_id, {}).update({c.action_class: c for c in signed})
+    return {"principal_id": principal_id,
+            "certificates": [c.model_dump(mode="json") for c in signed]}
+
+
 @app.get("/escalations")
 def list_escalations(principal_id: str | None = None) -> list[dict]:
     """Pending approvals. Omit principal_id for the full operator inbox."""
@@ -1184,14 +1239,37 @@ def list_escalations(principal_id: str | None = None) -> list[dict]:
     return [r.model_dump(mode="json") for r in items]
 
 
+@app.get("/escalations/{request_id}")
+def get_escalation(request_id: str) -> dict:
+    """One escalation, plus the ``action_digest`` a principal signs to approve it
+    client-side (``escalation.make_approval`` with the principal's local key)."""
+    from eidolon.escalation.types import action_digest
+
+    req = escalations().get(request_id)
+    if req is None:
+        raise HTTPException(status_code=404, detail="no such escalation")
+    out = req.model_dump(mode="json")
+    out["action_digest"] = action_digest(req.action, req.principal_id)
+    return out
+
+
 @app.post("/escalations/{request_id}/approve")
-def approve_escalation(request_id: str, signing_key: str = Body(..., embed=True)) -> dict:
+def approve_escalation(request_id: str, signing_key: str | None = Body(default=None),
+                       approval: Approval | None = Body(default=None)) -> dict:
+    """Approve with a pre-signed ``approval`` (preferred: the key never leaves the
+    principal), or — dev convenience — with the raw ``signing_key``."""
     q = escalations()
     req = q.get(request_id)
     if req is None:
         raise HTTPException(status_code=404, detail="no such escalation")
+    if approval is None and signing_key is None:
+        raise HTTPException(status_code=422, detail="provide a signed `approval` (or `signing_key`)")
     try:
-        approval = q.approve(request_id, signing_key)
+        if approval is not None:
+            approval = q.approve_signed(request_id, approval)
+        else:
+            _require_server_signing()
+            approval = q.approve(request_id, signing_key)
     except (ValueError, KeyError) as exc:
         raise HTTPException(status_code=409, detail=str(exc)) from exc
     ec = q.exec_context_for(request_id)
@@ -1253,7 +1331,7 @@ def ingest_event(request: Request, event: live_svc.GatewayEvent = Body(...)) -> 
             "gateway_id": agent["id"],
             "agent": event.agent or agent["name"],
         })
-    elif not is_valid_gateway_key(key):
+    elif not is_valid_gateway_key(key, request=request):
         raise HTTPException(status_code=401, detail="valid gateway key required",
                             headers={"WWW-Authenticate": "Bearer"})
     killed = live_svc.record_event(_live_store(), event)
@@ -1484,6 +1562,7 @@ def run_skill(
 ) -> dict:
     # Subordinate to KAIROS: every step is re-resolved through the gate.
     rt = runtime()
+    certificates, _rejected = rt.certificates_for(context.principal_id, certificates)
     try:
         run = SkillExecutor(rt.kairos).run(
             skill, context, chain, certificates, params=params
