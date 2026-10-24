@@ -64,6 +64,7 @@ class GovernanceEngine:
         purpose: PurposeTracker | None = None,
         reporter: Any | None = None,  # gateway.reporter.Reporter (mission control)
         org_policy: Any | None = None,  # gateway.orgpolicy.OrgPolicy (org guardrails)
+        classifier: Any | None = None,  # (tool, args) -> (policy tool id, args)
     ) -> None:
         self._kairos = kairos
         self._policies = policy_map
@@ -75,6 +76,10 @@ class GovernanceEngine:
         self._purpose = purpose
         self._reporter = reporter
         self._org_policy = org_policy
+        self._classifier = classifier
+
+    def _classify(self, tool: str, arguments: dict) -> tuple[str, dict]:
+        return self._classifier(tool, arguments) if self._classifier else (tool, arguments)
 
     def decide(self, tool: str, arguments: dict) -> GovernedResult:
         """Govern a tool call WITHOUT forwarding (sync). ``allowed`` means the
@@ -84,19 +89,72 @@ class GovernanceEngine:
         real downstream call itself — attestation is already written by the time
         this returns, so attest-then-act holds either way.
         """
+        tool, arguments = self._classify(tool, arguments)
         policy = self._policies.policy_for(tool)
         summary = _summarize(arguments)
+        killed = self._killed_refusal(tool, policy.action_class, summary)
+        if killed is not None:
+            return killed
+        action, context = self._build(tool, arguments, policy, summary)
+        decision = self._kairos.resolve(action, context, self._chain, self._certs, self._icert)
+        return self._finish(tool, policy.action_class, summary, decision)
+
+    # -- approvals ----------------------------------------------------------
+    def action_for(self, tool: str, arguments: dict) -> Action:
+        """The exact :class:`Action` the gate resolves for this call — including
+        the dynamic exclusions from taint, purpose and org policy. A principal
+        signs this to approve an escalated call::
+
+            approval = make_approval(engine.action_for(tool, args), principal_id, key)
+            engine.decide_with_approval(tool, args, approval)
+
+        If the call's exclusions change in between (e.g. the taint layer learns
+        a secret the arguments now carry), the digest changes and the approval no
+        longer matches — so an approval can never launder a new exclusion.
+        """
+        tool, arguments = self._classify(tool, arguments)
+        policy = self._policies.policy_for(tool)
+        return self._build(tool, arguments, policy, _summarize(arguments))[0]
+
+    def decide_with_approval(self, tool: str, arguments: dict, approval: Any) -> GovernedResult:
+        """Re-resolve an escalated call under the principal's signed approval.
+        THEMIS is still verified, so an approval never grants authority the
+        credential lacks; the kill switch still applies."""
+        tool, arguments = self._classify(tool, arguments)
+        policy = self._policies.policy_for(tool)
+        summary = _summarize(arguments)
+        killed = self._killed_refusal(tool, policy.action_class, summary)
+        if killed is not None:
+            return killed
+        action, context = self._build(tool, arguments, policy, summary)
+        decision = self._kairos.resolve_with_approval(action, context, self._chain, approval,
+                                                      self._certs)
+        return self._finish(tool, policy.action_class, summary, decision)
+
+    def govern_with_approval(self, tool: str, arguments: dict, approval: Any,
+                             forward: ForwardFn | None = None) -> GovernedResult:
+        """:meth:`decide_with_approval`, then forward to the real tool if allowed."""
+        return self._forward(tool, arguments, self.decide_with_approval(tool, arguments, approval),
+                             forward)
+
+    # -- internals ----------------------------------------------------------
+    def _killed_refusal(self, tool: str, action_class: str, summary: str) -> GovernedResult | None:
         # Operator kill switch (mission control): a killed gateway refuses
         # everything until the platform restores it. The attempt is still
         # reported — the feed shows what the agent tried while dark.
-        if self._reporter is not None and self._reporter.killed:
-            refusal = GovernedResult(
-                tool=tool, action_class=policy.action_class, level="KILLED",
-                allowed=False, rationale="authority revoked by operator (kill switch)",
-                message="EIDOLON: this gateway has been killed by its operator; no tools may run.",
-            )
-            self._reporter.report_result(refusal, summary=summary)  # may un-kill
-            return refusal
+        if self._reporter is None or not self._reporter.killed:
+            return None
+        refusal = GovernedResult(
+            tool=tool, action_class=action_class, level="KILLED",
+            allowed=False, rationale="authority revoked by operator (kill switch)",
+            message="EIDOLON: this gateway has been killed by its operator; no tools may run.",
+        )
+        self._reporter.report_result(refusal, summary=summary)  # may un-kill
+        return refusal
+
+    def _build(self, tool: str, arguments: dict, policy: Any, summary: str
+               ) -> tuple[Action, Context]:
+        """The one place a tool call becomes an Action + Context."""
         # Data-flow layer: if a sensitive value learned from a prior read is
         # flowing out through this egress call, mark it as exfiltration. The gate
         # then denies-and-attests it via the normal exclusion path — authority
@@ -128,10 +186,12 @@ class GovernanceEngine:
             context_text=_safe_json(arguments),
             situation=f"the {tool} tool",
         )
-        decision = self._kairos.resolve(action, context, self._chain, self._certs, self._icert)
+        return action, context
+
+    def _finish(self, tool: str, action_class: str, summary: str, decision: Any) -> GovernedResult:
         acting = decision.level in _ACTING
         result = GovernedResult(
-            tool=tool, action_class=policy.action_class, level=decision.level.value,
+            tool=tool, action_class=action_class, level=decision.level.value,
             allowed=acting, attestation_hash=decision.attestation_hash,
             rationale=decision.rationale,
             message=None if acting else (decision.output or _refusal_message(decision.level, decision.rationale)),
@@ -150,7 +210,10 @@ class GovernanceEngine:
     def govern(self, tool: str, arguments: dict, forward: ForwardFn | None = None) -> GovernedResult:
         """Govern AND forward (sync). Forwards to the real tool only when the
         gate authorized an acting level; otherwise returns the refusal/draft."""
-        result = self.decide(tool, arguments)
+        return self._forward(tool, arguments, self.decide(tool, arguments), forward)
+
+    def _forward(self, tool: str, arguments: dict, result: GovernedResult,
+                 forward: ForwardFn | None) -> GovernedResult:
         if not result.allowed:
             return result
         if forward is None:

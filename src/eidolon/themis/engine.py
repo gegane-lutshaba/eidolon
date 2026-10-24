@@ -29,6 +29,7 @@ from eidolon.common.canonical import canonical_bytes
 from eidolon.common.errors import AttenuationError
 from eidolon.profile.schema import autonomy_rank
 from eidolon.themis.revocation_store import RevocationStore
+from eidolon.themis.scope import all_covered, meet
 from eidolon.themis.types import (
     CredResult,
     Delegation,
@@ -121,10 +122,10 @@ class Themis:
         return self._sign(body, issuer_priv_hex)
 
     def _assert_subset(self, parent: DelegationBody, child: MintParams) -> None:
-        # scope: every (selector, value) in child must exist in parent.
+        # scope: every (selector, value) in child must be within the parent's
+        # grant (exact for most selectors, prefix containment for paths).
         for stype, vals in child.scope.items():
-            pvals = set(parent.scope.get(stype, []))
-            if not set(vals).issubset(pvals):
+            if not all_covered(stype, vals, parent.scope.get(stype, [])):
                 raise AttenuationError(f"scope widens on selector {stype!r}")
         # permitted_classes: child ⊆ parent.
         if not set(child.permitted_classes).issubset(parent.permitted_classes):
@@ -225,8 +226,7 @@ class Themis:
             return f"class {action.action_class!r} not permitted"
         # action scope must be within effective scope
         for stype, vals in action.scope.selectors.items():
-            allowed = set(eff.scope.get(stype, []))
-            if not set(vals).issubset(allowed):
+            if not all_covered(stype, vals, eff.scope.get(stype, [])):
                 return f"action scope outside grant on selector {stype!r}"
         # action must not touch an effective exclusion
         hit = set(action.touches_exclusions) & set(eff.exclusions)
@@ -289,7 +289,8 @@ class Themis:
 
         for d in ordered[1:]:
             b = d.body
-            scope = {k: scope.get(k, set()) & set(b.scope.get(k, [])) for k in scope.keys() & b.scope.keys()}
+            scope = {k: meet(k, scope.get(k, set()), b.scope.get(k, []))
+                     for k in scope.keys() & b.scope.keys()}
             classes &= set(b.permitted_classes)
             exclusions |= set(b.exclusions)  # union: most restrictive
             escalation |= set(b.escalation_required)

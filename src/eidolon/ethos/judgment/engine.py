@@ -27,6 +27,9 @@ from eidolon.types import Action, Context
 # Evidence-strength thresholds (transparent constants, not learned weights).
 _STRONG_EVIDENCE = 1.5
 _SOME_EVIDENCE = 0.6
+# Evidence floor for profile-declared routine classes: saturates confidence at the
+# PROCEED ceiling (0.95), clearing any class threshold.
+_ROUTINE_FLOOR = 3.0
 # Relevance below this doesn't count a memory as supporting evidence.
 _MIN_RELEVANCE = 0.12
 
@@ -85,6 +88,18 @@ class JudgmentEngine:
         # -- Rule 2: evidence grounding -----------------------------------
         strength, ev_trace = self._evidence_strength(action, context, memories)
         trace.append(ev_trace)
+        # Class-grounded precedent: the profile declares this class routine,
+        # so argument wording (or an empty memory partition) can't push an
+        # in-grant call below acting. Recorded in the trace, so it's auditable.
+        if action.action_class in profile.fidelity_rubric.baseline_precedent:
+            if strength < _ROUTINE_FLOOR:
+                trace.append(PolicyStep(
+                    rule="baseline-precedent",
+                    outcome=f"profile marks {action.action_class!r} routine; "
+                            f"strength {strength:.2f} floored to {_ROUTINE_FLOOR:.2f}",
+                    weight=_ROUTINE_FLOOR - strength,
+                ))
+                strength = _ROUTINE_FLOOR
 
         # -- Rule 3: decision + calibration -------------------------------
         if strength >= _STRONG_EVIDENCE:

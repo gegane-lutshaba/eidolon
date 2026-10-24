@@ -73,6 +73,10 @@ domain_profile:
     # controls are authority (scope), exclusions (exfil), and ceilings
     # (destructive escalates) — not per-call "would they do this" fidelity.
     calibration_target: 0.6
+    # Routine for a coding agent by construction: grounded in the class, so no
+    # seeded memories are needed and verbose arguments can't flip a decision.
+    # destructive-command is deliberately absent (it escalates).
+    baseline_precedent: [read-code, edit-code, run-command, web-egress, manage-tasks]
 
   tool_bindings:
     - class: read-code

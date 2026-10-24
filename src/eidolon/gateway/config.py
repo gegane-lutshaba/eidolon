@@ -12,7 +12,7 @@ builder mints it from the principal key for convenience.
 
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, Literal
 
 from pydantic import BaseModel, Field
 
@@ -69,6 +69,10 @@ class GatewayConfig(BaseModel):
     # Org policy: action classes forced to require human approval (must-escalate),
     # merged into the credential on top of the profile's own escalation_required.
     extra_escalation_required: list[str] = Field(default_factory=list)
+    # Argument-aware tool classification applied before policy lookup.
+    # "coding" splits Bash into run-command vs destructive-command
+    # (eidolon.gateway.coding.classify); "none" uses tool names as-is.
+    tool_classifier: Literal["none", "coding"] = "none"
 
 
 def build_engine(
@@ -155,4 +159,13 @@ def build_engine(
         kairos=kairos, policy_map=policy_map, chain=[root], principal_id=principal_pub,
         certificates=certs, integrity_certificate=icert, taint=taint, purpose=purpose,
         reporter=reporter, org_policy=org_policy,
+        classifier=_classifier(config.tool_classifier),
     )
+
+
+def _classifier(name: str):
+    if name == "coding":
+        from eidolon.gateway.coding import classify
+
+        return classify
+    return None
