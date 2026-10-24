@@ -54,7 +54,32 @@ _STATIC = pathlib.Path(__file__).parent / "static"
 
 _runtime: Runtime | None = None
 _escalations: EscalationQueue | None = None
-_login_hits: dict[str, list[float]] = {}  # ip -> recent login attempt times
+
+
+_login_hits: dict[str, list[float]] = {}  # ip -> recent attempt times (sliding window)
+_THROTTLE_SWEEP_EVERY = 1000
+_throttle_calls = 0
+
+
+def _throttle(request: Request, max_hits: int, window: float = 300.0,
+              detail: str = "too many attempts; try again shortly") -> None:
+    """Per-IP sliding-window limit for login/signup/contact. Raises 429.
+
+    Idle IPs are swept periodically, so the map stays bounded by recently
+    active clients instead of growing with every address ever seen."""
+    global _throttle_calls
+    ip = client_ip(request)  # proxy-aware behind Caddy (EIDOLON_TRUST_PROXY_HEADERS)
+    now = time.monotonic()
+    _throttle_calls += 1
+    if _throttle_calls % _THROTTLE_SWEEP_EVERY == 0:
+        for k in [k for k, v in _login_hits.items() if not v or now - v[-1] >= window]:
+            _login_hits.pop(k, None)
+    hits = [t for t in _login_hits.get(ip, []) if now - t < window]
+    if len(hits) >= max_hits:
+        _login_hits[ip] = hits
+        raise HTTPException(status_code=429, detail=detail)
+    hits.append(now)
+    _login_hits[ip] = hits
 
 
 def runtime() -> Runtime:
@@ -161,13 +186,7 @@ def ready() -> Response:
 
 @app.post("/login")
 def login(request: Request, token: str = Body(..., embed=True)) -> Response:
-    ip = client_ip(request)  # proxy-aware behind Caddy (EIDOLON_TRUST_PROXY_HEADERS)
-    now = time.monotonic()
-    hits = [t for t in _login_hits.get(ip, []) if now - t < 300.0]
-    if len(hits) >= 10:
-        raise HTTPException(status_code=429, detail="too many attempts; try again shortly")
-    hits.append(now)
-    _login_hits[ip] = hits
+    _throttle(request, 10, 300.0, "too many attempts; try again shortly")
 
     role = role_for_token(token)
     if role is None:
@@ -227,13 +246,7 @@ def auth_signup(request: Request, email: str = Body(...), password: str = Body(.
         raise HTTPException(status_code=403, detail="signup is closed")
     if settings.invite_code and invite_code != settings.invite_code:
         raise HTTPException(status_code=403, detail="valid invite code required")
-    ip = client_ip(request)
-    now = time.monotonic()
-    hits = [t for t in _login_hits.get(ip, []) if now - t < 300.0]
-    if len(hits) >= 10:
-        raise HTTPException(status_code=429, detail="too many attempts; try again shortly")
-    hits.append(now)
-    _login_hits[ip] = hits
+    _throttle(request, 10, 300.0, "too many attempts; try again shortly")
     try:
         user = accounts_svc.create_user(_live_store(), email, password)
     except ValueError as exc:
@@ -244,13 +257,7 @@ def auth_signup(request: Request, email: str = Body(...), password: str = Body(.
 
 @app.post("/auth/login")
 def auth_login(request: Request, email: str = Body(...), password: str = Body(...)) -> Response:
-    ip = client_ip(request)
-    now = time.monotonic()
-    hits = [t for t in _login_hits.get(ip, []) if now - t < 300.0]
-    if len(hits) >= 10:
-        raise HTTPException(status_code=429, detail="too many attempts; try again shortly")
-    hits.append(now)
-    _login_hits[ip] = hits
+    _throttle(request, 10, 300.0, "too many attempts; try again shortly")
     user = accounts_svc.authenticate(_live_store(), email, password)
     if user is None:
         raise HTTPException(status_code=401, detail="invalid email or password")
@@ -725,8 +732,7 @@ def certificate_badge(cert_id: str) -> Response:
 def api_feed_recent(request: Request, limit: int = 50) -> list[dict]:
     _user, org_id = _req_org(request, "auditor")
     owned = accounts_svc.owned_gateway_ids(_live_store(), org_id)
-    events = live_svc.recent_events(_live_store(), limit=500)
-    return [e for e in events if e["gateway_id"] in owned][-limit:]
+    return live_svc.recent_events(_live_store(), limit=max(1, min(limit, 500)), gateway_ids=owned)
 
 
 @app.get("/api/feed")
@@ -832,13 +838,7 @@ def contact_submit(
     from eidolon.api import community
     from eidolon.api.notify import notify_lead
 
-    ip = client_ip(request)
-    now = time.monotonic()
-    hits = [t for t in _login_hits.get(ip, []) if now - t < 300.0]
-    if len(hits) >= 8:
-        raise HTTPException(status_code=429, detail="too many submissions; try again shortly")
-    hits.append(now)
-    _login_hits[ip] = hits
+    _throttle(request, 8, 300.0, "too many submissions; try again shortly")
     try:
         lead = community.save_lead(_live_store(), name, email, handle, interest, message)
     except ValueError as exc:

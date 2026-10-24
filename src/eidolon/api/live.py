@@ -146,15 +146,22 @@ def list_gateways(session_factory) -> list[dict]:
         ]
 
 
-def recent_events(session_factory, limit: int = REPLAY_ON_CONNECT) -> list[dict]:
+def recent_events(session_factory, limit: int = REPLAY_ON_CONNECT,
+                  gateway_ids: set[str] | None = None) -> list[dict]:
+    """The latest ``limit`` events, oldest first. ``gateway_ids`` restricts to
+    those gateways *in the query*, so a quiet org's feed isn't crowded out by
+    other tenants' traffic."""
     from sqlalchemy import select
 
     from eidolon.data.models import GatewayEventRow
 
+    if gateway_ids is not None and not gateway_ids:
+        return []
+    stmt = select(GatewayEventRow)
+    if gateway_ids is not None:
+        stmt = stmt.where(GatewayEventRow.gateway_id.in_(gateway_ids))
     with session_factory() as s:
-        rows = s.execute(
-            select(GatewayEventRow).order_by(GatewayEventRow.seq.desc()).limit(limit)
-        ).scalars().all()
+        rows = s.execute(stmt.order_by(GatewayEventRow.seq.desc()).limit(limit)).scalars().all()
     return [
         {"gateway_id": r.gateway_id, "agent": r.agent, "tool": r.tool,
          "action_class": r.action_class, "level": r.level, "allowed": r.allowed,
