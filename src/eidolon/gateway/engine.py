@@ -81,7 +81,8 @@ class GovernanceEngine:
     def _classify(self, tool: str, arguments: dict) -> tuple[str, dict]:
         return self._classifier(tool, arguments) if self._classifier else (tool, arguments)
 
-    def decide(self, tool: str, arguments: dict) -> GovernedResult:
+    def decide(self, tool: str, arguments: dict,
+               correlation: dict[str, str] | None = None) -> GovernedResult:
         """Govern a tool call WITHOUT forwarding (sync). ``allowed`` means the
         gate authorized an acting level; the caller performs the side effect.
 
@@ -95,7 +96,7 @@ class GovernanceEngine:
         killed = self._killed_refusal(tool, policy.action_class, summary)
         if killed is not None:
             return killed
-        action, context = self._build(tool, arguments, policy, summary)
+        action, context = self._build(tool, arguments, policy, summary, correlation)
         decision = self._kairos.resolve(action, context, self._chain, self._certs, self._icert)
         return self._finish(tool, policy.action_class, summary, decision)
 
@@ -116,7 +117,8 @@ class GovernanceEngine:
         policy = self._policies.policy_for(tool)
         return self._build(tool, arguments, policy, _summarize(arguments))[0]
 
-    def decide_with_approval(self, tool: str, arguments: dict, approval: Any) -> GovernedResult:
+    def decide_with_approval(self, tool: str, arguments: dict, approval: Any,
+                             correlation: dict[str, str] | None = None) -> GovernedResult:
         """Re-resolve an escalated call under the principal's signed approval.
         THEMIS is still verified, so an approval never grants authority the
         credential lacks; the kill switch still applies."""
@@ -126,16 +128,17 @@ class GovernanceEngine:
         killed = self._killed_refusal(tool, policy.action_class, summary)
         if killed is not None:
             return killed
-        action, context = self._build(tool, arguments, policy, summary)
+        action, context = self._build(tool, arguments, policy, summary, correlation)
         decision = self._kairos.resolve_with_approval(action, context, self._chain, approval,
                                                       self._certs)
         return self._finish(tool, policy.action_class, summary, decision)
 
     def govern_with_approval(self, tool: str, arguments: dict, approval: Any,
-                             forward: ForwardFn | None = None) -> GovernedResult:
+                             forward: ForwardFn | None = None,
+                             correlation: dict[str, str] | None = None) -> GovernedResult:
         """:meth:`decide_with_approval`, then forward to the real tool if allowed."""
-        return self._forward(tool, arguments, self.decide_with_approval(tool, arguments, approval),
-                             forward)
+        result = self.decide_with_approval(tool, arguments, approval, correlation)
+        return self._forward(tool, arguments, result, forward)
 
     # -- internals ----------------------------------------------------------
     def _killed_refusal(self, tool: str, action_class: str, summary: str) -> GovernedResult | None:
@@ -152,8 +155,8 @@ class GovernanceEngine:
         self._reporter.report_result(refusal, summary=summary)  # may un-kill
         return refusal
 
-    def _build(self, tool: str, arguments: dict, policy: Any, summary: str
-               ) -> tuple[Action, Context]:
+    def _build(self, tool: str, arguments: dict, policy: Any, summary: str,
+               correlation: dict[str, str] | None = None) -> tuple[Action, Context]:
         """The one place a tool call becomes an Action + Context."""
         # Data-flow layer: if a sensitive value learned from a prior read is
         # flowing out through this egress call, mark it as exfiltration. The gate
@@ -185,6 +188,7 @@ class GovernanceEngine:
             query=f"{tool.replace('_', ' ')} {summary}".strip(),
             context_text=_safe_json(arguments),
             situation=f"the {tool} tool",
+            correlation=dict(correlation or {}),
         )
         return action, context
 
@@ -207,10 +211,12 @@ class GovernanceEngine:
                 })
         return result
 
-    def govern(self, tool: str, arguments: dict, forward: ForwardFn | None = None) -> GovernedResult:
+    def govern(self, tool: str, arguments: dict, forward: ForwardFn | None = None,
+               correlation: dict[str, str] | None = None) -> GovernedResult:
         """Govern AND forward (sync). Forwards to the real tool only when the
-        gate authorized an acting level; otherwise returns the refusal/draft."""
-        return self._forward(tool, arguments, self.decide(tool, arguments), forward)
+        gate authorized an acting level; otherwise returns the refusal/draft.
+        ``correlation`` (e.g. ``{"session": ..}``) is recorded on the attestation."""
+        return self._forward(tool, arguments, self.decide(tool, arguments, correlation), forward)
 
     def _forward(self, tool: str, arguments: dict, result: GovernedResult,
                  forward: ForwardFn | None) -> GovernedResult:

@@ -37,6 +37,7 @@ from eidolon.sage.port import (
     Memory,
     ReplayFilter,
     Scope,
+    correlation_matches,
     lexical_overlap,
     now_utc,
 )
@@ -196,6 +197,8 @@ class PostgresSagePort:
             # backend-independent (SQLite would otherwise strip the tz).
             if filter.since and rec.timestamp < filter.since:
                 continue
+            if not correlation_matches(rec, filter.correlation):
+                continue
             out.append(rec)
             if len(out) >= filter.limit:
                 break
@@ -232,7 +235,7 @@ class PostgresSagePort:
 
     def _to_memory(self, r: SageMemoryRow) -> Memory:
         return Memory(
-            id=r.mem_id,
+            id=r.mem_id or "",
             principal_id=r.principal_id,
             content=r.content,
             type=r.type,

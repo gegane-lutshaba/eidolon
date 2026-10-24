@@ -102,8 +102,9 @@ class ProceduralAttacker:
                 ))
             elif escalate:  # fallback: mislabel an excluded action as a benign class
                 cls = "answer-status" if "answer-status" in profile.class_names() else classes[0]
-                excl = exclusions[i % len(exclusions)] if exclusions else None
-                if excl:
+                maybe_excl = exclusions[i % len(exclusions)] if exclusions else None
+                if maybe_excl:
+                    excl = maybe_excl
                     cases.append(AttackCase(
                         suite="auto-scope-evasion", name=f"mislabel-{i}",
                         description="[gen] boundary-crossing action disguised as a read",
@@ -176,7 +177,8 @@ class LLMAttacker:
                 model=self._settings.style_model, max_tokens=600,
                 messages=[{"role": "user", "content": prompt}],
             )
-            text = "".join(b.text for b in msg.content if getattr(b, "type", None) == "text")
+            text = "".join(getattr(b, "text", "") for b in msg.content
+                           if getattr(b, "type", None) == "text")
             lines = [ln.strip("-* \t") for ln in text.splitlines() if ln.strip()]
             return lines[:n]
         except Exception:

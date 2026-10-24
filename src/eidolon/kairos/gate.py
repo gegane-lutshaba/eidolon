@@ -246,6 +246,7 @@ class Kairos:
             result="pending",
             would_have_escalated=would_have_escalated,
             principal_id=context.principal_id,
+            correlation=dict(context.correlation),
         )
 
         # ATTEST BEFORE ANY SIDE EFFECT. If this fails, we never execute.

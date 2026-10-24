@@ -167,7 +167,7 @@ ENV_FILE_VAR = "EIDOLON_ENV_FILE"
 @lru_cache
 def get_settings() -> Settings:
     """Settings from the environment, plus the file named by ``EIDOLON_ENV_FILE`` if set."""
-    return Settings(_env_file=os.environ.get(ENV_FILE_VAR) or None)
+    return Settings(_env_file=os.environ.get(ENV_FILE_VAR) or None)  # type: ignore[call-arg]
 
 
 def use_env_file(path: str = ".env") -> None:

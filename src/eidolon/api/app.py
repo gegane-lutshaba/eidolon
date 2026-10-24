@@ -1269,6 +1269,7 @@ def approve_escalation(request_id: str, signing_key: str | None = Body(default=N
             approval = q.approve_signed(request_id, approval)
         else:
             _require_server_signing()
+            assert signing_key is not None  # checked above
             approval = q.approve(request_id, signing_key)
     except (ValueError, KeyError) as exc:
         raise HTTPException(status_code=409, detail=str(exc)) from exc
@@ -1520,7 +1521,7 @@ def capture_ingest_multi(
     batches: list[dict] = Body(...),  # [{consent: ConsentGrant, records: [...]}]
 ) -> dict:
     # Build one consent-gated connector per source, then ingest them together.
-    connectors = []
+    connectors: list = []
     for batch in batches:
         consent = ConsentGrant.model_validate(batch["consent"])
         records = batch.get("records", [])

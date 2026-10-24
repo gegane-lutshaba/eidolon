@@ -40,3 +40,6 @@ class Context(BaseModel):
     context_text: str = ""
     situation: str = ""  # short human phrase used in escalation templates
     metadata: dict = Field(default_factory=dict)
+    # Copied onto the attestation, e.g. {"session": "...", "task": "..."}, so a
+    # caller can find the ledger entries for its own unit of work.
+    correlation: dict[str, str] = Field(default_factory=dict)

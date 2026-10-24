@@ -116,6 +116,8 @@ class EscalationQueue:
             raise KeyError(f"no escalation {request_id!r}")
         self.expire_stale()
         req = self.get(request_id)
+        if req is None:
+            raise KeyError(f"no escalation {request_id!r}")
         if req.status != EscalationStatus.PENDING:
             raise ValueError(f"escalation {request_id!r} is {req.status.value}, not pending")
         return req

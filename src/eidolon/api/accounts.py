@@ -438,7 +438,7 @@ def user_for_session(sf, token: str | None) -> dict | None:
         if sess is None:
             return None
         expires = _as_utc(sess.expires_at)
-        if expires < _now():
+        if expires is None or expires < _now():
             s.delete(sess)
             s.commit()
             return None
