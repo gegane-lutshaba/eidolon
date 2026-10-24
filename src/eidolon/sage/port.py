@@ -18,7 +18,7 @@ from __future__ import annotations
 import datetime as _dt
 from typing import Any, Protocol, runtime_checkable
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_serializer
 
 
 class Scope(BaseModel):
@@ -71,6 +71,23 @@ class Attestation(BaseModel):
     would_have_escalated: bool = False
     principal_id: str
     signature: str | None = None
+    # Caller-supplied correlation (session/task/run ids) so an embedder can tie
+    # a ledger entry to its own unit of work. Omitted from the serialized form
+    # when empty, so records written before this field hash exactly as they did
+    # and existing ledger chains still verify.
+    correlation: dict[str, str] = Field(default_factory=dict)
+
+    @model_serializer(mode="wrap")
+    def _omit_empty_correlation(self, handler):  # type: ignore[no-untyped-def]
+        data = handler(self)
+        if isinstance(data, dict) and not data.get("correlation"):
+            data.pop("correlation", None)
+        return data
+
+
+def correlation_matches(record: Attestation, wanted: dict[str, str] | None) -> bool:
+    """True iff every wanted correlation key/value is on the record."""
+    return not wanted or all(record.correlation.get(k) == v for k, v in wanted.items())
 
 
 class ReplayFilter(BaseModel):
@@ -80,6 +97,7 @@ class ReplayFilter(BaseModel):
     action_class: str | None = None
     ledger_hash: str | None = None
     since: _dt.datetime | None = None
+    correlation: dict[str, str] | None = None  # subset match on Attestation.correlation
     limit: int = 1000
 
 

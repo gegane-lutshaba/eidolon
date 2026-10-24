@@ -19,115 +19,18 @@ sensitive value read that flows into a shell/web call is denied as exfiltration.
 
 from __future__ import annotations
 
-import re
 from typing import Any
 
 from eidolon.api import live as live_svc
 from eidolon.api.hosted import LocalReporter
 
-# -- Claude Code / Cursor / Codex native tools -> governed policy ----------
-# Keyed by the policy name we hand to the gate (also what shows in the feed).
-_READ = "read-code"
-_EDIT = "edit-code"
-_RUN = "run-command"
-_WEB = "web-egress"
-_DESTRUCTIVE = "destructive-command"
-_TASKS = "manage-tasks"
+# The native tool map, destructive-shell classifier, policies and seeds live in
+# the web-free ``eidolon.gateway.coding`` (shared with embedders); the hook
+# endpoints re-export ``classify`` and ``decision_for`` from here.
+from eidolon.gateway.coding import CLASSES, DESTRUCTIVE, classify, tool_policies
+from eidolon.gateway.coding import permission_decision as decision_for
 
-# tool name (as the client reports it) -> (policy tool id, action_class, sensitive, egress)
-_TOOL_MAP: dict[str, tuple[str, str, bool, bool]] = {
-    # reads (sensitive sources: their output may carry secrets to taint)
-    "Read": ("Read", _READ, True, False),
-    "Grep": ("Grep", _READ, False, False),
-    "Glob": ("Glob", _READ, False, False),
-    "LS": ("LS", _READ, False, False),
-    "NotebookRead": ("NotebookRead", _READ, True, False),
-    # edits (recoverable via git; autonomous in scope)
-    "Edit": ("Edit", _EDIT, False, False),
-    "Write": ("Write", _EDIT, False, False),
-    "MultiEdit": ("MultiEdit", _EDIT, False, False),
-    "NotebookEdit": ("NotebookEdit", _EDIT, False, False),
-    # shell (egress: a command can carry data out)
-    "Bash": ("Bash", _RUN, False, True),
-    "BashOutput": ("BashOutput", _READ, False, False),
-    "KillBash": ("KillBash", _RUN, False, False),
-    # web (egress)
-    "WebFetch": ("WebFetch", _WEB, False, True),
-    "WebSearch": ("WebSearch", _WEB, False, True),
-    # the agent's own bookkeeping
-    "TodoWrite": ("TodoWrite", _TASKS, False, False),
-    "Task": ("Task", _TASKS, False, False),
-}
-
-# Shell commands that are irreversible / dangerous -> destructive-command
-# (escalates to a human). Matched against the Bash `command` string.
-_DESTRUCTIVE_PATTERNS = [
-    r"\brm\s+-[a-z]*[rf]", r"\brmdir\b", r"\bmkfs\b", r"\bdd\s+if=",
-    r":\(\)\s*\{", r">\s*/dev/sd", r"\bshred\b",
-    r"\bgit\s+push\b.*(--force|-f)\b", r"\bgit\s+reset\s+--hard\b",
-    r"\bgit\s+clean\s+-[a-z]*f", r"\bcurl\b[^|]*\|\s*(sh|bash)", r"\bwget\b[^|]*\|\s*(sh|bash)",
-    r"\bchmod\s+-R\s+777", r"\bshutdown\b", r"\breboot\b", r"\bkill\s+-9\s+-1\b",
-    r"\bnpm\s+publish\b", r"\bdocker\s+system\s+prune\b",
-    r"\bDROP\s+TABLE\b", r"\bTRUNCATE\b", r"\bDELETE\s+FROM\b",
-]
-_DESTRUCTIVE_RE = re.compile("|".join(_DESTRUCTIVE_PATTERNS), re.IGNORECASE)
-
-
-def classify(tool_name: str, tool_input: dict | None) -> tuple[str, dict]:
-    """Map a client tool call -> (policy tool id, arguments for the gate).
-
-    Bash is split into run-command vs destructive-command by inspecting the
-    command. Unknown tools fall through to a distinct id so the gate's default
-    (fail-closed) class applies.
-    """
-    args = dict(tool_input or {})
-    if tool_name == "Bash":
-        cmd = str(args.get("command", ""))
-        if _DESTRUCTIVE_RE.search(cmd):
-            return "Bash(destructive)", args
-        return "Bash", args
-    mapped = _TOOL_MAP.get(tool_name)
-    if mapped is None:
-        return tool_name, args  # unknown -> gate default class (escalate)
-    return mapped[0], args
-
-
-def _tool_policies() -> list[dict]:
-    scope = {"selectors": {"project": ["workspace"]}}
-    pol = []
-    for policy_id, action_class, sensitive, egress in _TOOL_MAP.values():
-        entry: dict[str, Any] = {"tool": policy_id, "action_class": action_class, "scope": scope}
-        if sensitive:
-            entry["sensitive"] = True
-        if egress:
-            entry["egress"] = True
-        pol.append(entry)
-    # Bash split: the destructive variant is its own policy.
-    pol.append({"tool": "Bash(destructive)", "action_class": _DESTRUCTIVE,
-                "scope": scope, "egress": True})
-    return pol
-
-
-# Short, tool-echoing grounding memories. Fidelity strength is the SUM of
-# relevance across recalled memories, so several short seeds that lexically match
-# a tool's call query put routine dev work over the "strong evidence" bar (ACT).
-# The hard controls stay elsewhere: ceilings (destructive escalates), exclusions
-# (exfil denied), and authority (scope). Each is repeated so recall returns a
-# cluster for its tool.
-_SEEDS = [
-    "call tool Read file_path to read code files routinely",
-    "call tool Grep pattern to search code routinely",
-    "call tool Glob pattern to find files routinely",
-    "call tool LS path to list files routinely",
-    "call tool Edit file_path old_string new_string to edit code routinely",
-    "call tool Write file_path content to write code files routinely",
-    "call tool MultiEdit file_path to edit code routinely",
-    "call tool NotebookEdit file_path to edit notebooks routinely",
-    "call tool Bash command to run builds tests lint and git routinely",
-    "call tool WebFetch url to read documentation routinely",
-    "call tool WebSearch query to search documentation routinely",
-    "call tool TodoWrite todos to track tasks routinely",
-]
+__all__ = ["CodingEngineCache", "build_coding_engine", "classify", "decision_for"]
 
 
 def build_coding_engine(agent: dict, sf, hub):
@@ -148,12 +51,14 @@ def build_coding_engine(agent: dict, sf, hub):
         profile_id="coding-agent",
         principal_signing_key=key.signing_key_hex,
         scope={"project": ["workspace"]},
-        permitted_classes=[_READ, _EDIT, _RUN, _WEB, _DESTRUCTIVE, _TASKS],
+        permitted_classes=list(CLASSES),
         max_autonomy=preset["max_autonomy"],
-        seed_memories=[s for s in _SEEDS for _ in range(6)],
-        tool_policies=_tool_policies(),  # type: ignore[arg-type]
+        # No seeded precedent needed: the coding-agent profile grounds routine
+        # classes in the class itself (fidelity_rubric.baseline_precedent).
+        tool_policies=tool_policies(),  # type: ignore[arg-type]
         extra_escalation_required=list(policy.get("approval_classes") or []),
-        default_class=_DESTRUCTIVE,  # unknown native tools fail closed (escalate)
+        default_class=DESTRUCTIVE,
+        tool_classifier="coding",  # unknown native tools fail closed (escalate)
         gateway_id=agent["id"], agent_name=agent["name"],
     )
     engine = build_engine(cfg, sage=InMemorySagePort(), org_policy=org_pol)
@@ -185,19 +90,6 @@ class CodingEngineCache:
         an admin changes must-approve classes). Path/egress rules refresh live."""
         for aid in set(agent_ids):
             self._engines.pop(aid, None)
-
-
-def decision_for(result) -> str:
-    """Map a GovernedResult to a PreToolUse permission decision."""
-    if result.allowed:
-        return "allow"
-    level = (result.level or "").upper()
-    msg = (result.message or "").lower()
-    if level == "KILLED" or "killed by" in msg:
-        return "deny"  # operator kill switch — hard stop
-    if "ESCALATE" in level or "DRAFT" in level or "NOTIFY" in level:
-        return "ask"   # hand it to the human (approval), don't hard-block
-    return "deny"      # DENY / exclusion (e.g. data-exfiltration)
 
 
 def event_snapshot(sf, gateway_id: str) -> dict:

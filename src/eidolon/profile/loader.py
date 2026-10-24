@@ -103,6 +103,15 @@ def _check_invariants(profile: DomainProfile) -> list[str]:
             errors.append(f"tool_binding class {binding.class_!r} not in taxonomy")
 
     escalation = set(profile.mandate_schema.escalation_required)
+    by_class = {cap.class_: cap for cap in profile.capability_taxonomy}
+    for cls in profile.fidelity_rubric.baseline_precedent:
+        cap = by_class.get(cls)
+        if cap is None:
+            errors.append(f"baseline_precedent class {cls!r} not in taxonomy")
+        elif cap.reversibility == "irreversible" or cap.risk_tier >= 3 or cls in escalation:
+            errors.append(
+                f"baseline_precedent class {cls!r} is high-impact; routine precedent is only "
+                f"for reversible/recoverable classes that are not escalation_required")
     for cap in profile.capability_taxonomy:
         if (
             cap.reversibility == "irreversible"

@@ -1,9 +1,10 @@
 """Revocation + dead-man's-switch state (PRD §6.3, §8).
 
-Two implementations of one contract: the in-memory store for the fast lane,
-and :class:`PostgresRevocationStore` for single-box deployments — a restart
-must never resurrect revoked authority, so revocations and heartbeats persist
-in the operational store. A clock is injected so tests can prove <1s
+One contract, three implementations: the in-memory store for the fast lane;
+:class:`SqliteRevocationStore`, a state file for single-box deployments without
+Postgres (shared by every process on the box); and
+:class:`PostgresRevocationStore` over the operational store. A restart must
+never resurrect revoked authority. A clock is injected so tests can prove <1s
 revocation latency and dead-man auto-revocation deterministically.
 """
 
@@ -108,4 +109,45 @@ class PostgresRevocationStore(RevocationStore):
         if row is None:
             return False
         last = row.last_beat if row.last_beat.tzinfo else row.last_beat.replace(tzinfo=_dt.UTC)
+        return (self._clock() - last) > self._ttl
+
+
+class SqliteRevocationStore(RevocationStore):
+    """Durable revocations + heartbeats in a local state file (``StateDB``).
+
+    Every process pointing at the same file sees a revocation on its next check,
+    so revoking in the platform reaches an agent governed by another process.
+    """
+
+    def __init__(
+        self,
+        path_or_db,
+        heartbeat_ttl_seconds: int = 3600,
+        clock: Callable[[], _dt.datetime] = _default_clock,
+    ) -> None:
+        super().__init__(heartbeat_ttl_seconds, clock)
+        from eidolon.common.state_db import StateDB
+
+        self._db = path_or_db if isinstance(path_or_db, StateDB) else StateDB(path_or_db)
+
+    def revoke(self, delegation_id: str) -> None:
+        self._db.execute("INSERT OR IGNORE INTO revocations VALUES (?, ?)",
+                         (delegation_id, self._clock().isoformat()))
+
+    def is_revoked(self, delegation_id: str) -> bool:
+        return bool(self._db.execute(
+            "SELECT 1 FROM revocations WHERE delegation_id = ?", (delegation_id,)))
+
+    def heartbeat(self, principal_id: str) -> None:
+        self._db.execute("INSERT OR REPLACE INTO heartbeats VALUES (?, ?)",
+                         (principal_id, self._clock().isoformat()))
+
+    def is_dead_mans_expired(self, principal_id: str) -> bool:
+        rows = self._db.execute("SELECT last_beat FROM heartbeats WHERE principal_id = ?",
+                                (principal_id,))
+        if not rows:
+            return False
+        last = _dt.datetime.fromisoformat(rows[0][0])
+        if last.tzinfo is None:
+            last = last.replace(tzinfo=_dt.UTC)
         return (self._clock() - last) > self._ttl

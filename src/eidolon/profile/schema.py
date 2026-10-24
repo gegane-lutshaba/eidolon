@@ -68,6 +68,13 @@ class FidelityRubric(BaseModel):
     decision_points: list[str] = Field(default_factory=list)
     agreement_metric: str
     calibration_target: float = 0.85
+    # Classes that are routine *by construction* for this kind of twin (e.g. a
+    # coding agent reading and editing files in its grant). Their fidelity is
+    # grounded in the class, not in recalled wording: in-grant calls get a
+    # strong-evidence floor, so they neither need seeded memories nor drop to
+    # DRAFT when their arguments are verbose. Authority, exclusions and ceilings
+    # still apply; the loader refuses irreversible or high-risk classes here.
+    baseline_precedent: list[str] = Field(default_factory=list)
 
     @field_validator("calibration_target")
     @classmethod

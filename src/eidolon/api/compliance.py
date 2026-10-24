@@ -68,16 +68,19 @@ def _is_exfil(level: str, rationale: str | None) -> bool:
 
 
 def governance_summary(sf, *, agent_ids: set[str], since: _dt.datetime,
-                       until: _dt.datetime, max_rows: int = 20000) -> dict:
+                       until: _dt.datetime, max_rows: int | None = None) -> dict:
     """A readable governance posture for one org + window: the attested ledger
     turned into the answer IT asks — are agents acting in scope, what's held for
     approval, what's denied, and how many data-exfiltration attempts were blocked
-    — broken down per agent and per action class. Counts only (no attestations),
-    so it's cheap enough for a dashboard.
-    """
-    from sqlalchemy import select
+    — broken down per agent and per action class.
 
-    from eidolon.data.models import GatewayEventRow
+    Aggregated in SQL (GROUP BY), so cost tracks the number of distinct
+    agent/class/outcome combinations, not the number of events, and the counts
+    are exact. (``max_rows`` is accepted for compatibility and ignored.)
+    """
+    from sqlalchemy import case, func, select
+
+    from eidolon.data.models import GatewayEventRow as E
 
     out: dict = {
         "actions_governed": 0, "allowed": 0, "held": 0, "denied": 0, "killed": 0,
@@ -87,37 +90,36 @@ def governance_summary(sf, *, agent_ids: set[str], since: _dt.datetime,
     }
     if not agent_ids:
         return out
+    exfil = case((func.lower(func.coalesce(E.rationale, "")).like("%exfil%"), 1), else_=0)
+    stmt = (
+        select(E.gateway_id, func.max(E.agent), E.action_class, E.level, E.allowed,
+               exfil.label("exfil"), func.count().label("n"))
+        .where(E.gateway_id.in_(agent_ids), E.ts >= since, E.ts <= until)
+        .group_by(E.gateway_id, E.action_class, E.level, E.allowed, exfil)
+    )
     with sf() as s:
-        rows = s.execute(
-            select(GatewayEventRow.gateway_id, GatewayEventRow.agent,
-                   GatewayEventRow.action_class, GatewayEventRow.level,
-                   GatewayEventRow.allowed, GatewayEventRow.rationale)
-            .where(GatewayEventRow.gateway_id.in_(agent_ids),
-                   GatewayEventRow.ts >= since, GatewayEventRow.ts <= until)
-            .order_by(GatewayEventRow.seq.desc()).limit(max_rows + 1)
-        ).all()
-    out["truncated"] = len(rows) > max_rows
-    for gid, agent, cls, level, allowed, rationale in rows[:max_rows]:
+        groups = s.execute(stmt).all()
+    for gid, agent, cls, level, allowed, is_exfil, n in groups:
         lvl = (level or "").upper()
-        out["actions_governed"] += 1
+        out["actions_governed"] += n
         acls = out["by_action_class"].setdefault(cls or "unmapped", {"total": 0, "blocked": 0})
-        acls["total"] += 1
+        acls["total"] += n
         ag = out["by_agent"].setdefault(gid, {"agent": agent, "total": 0, "allowed": 0,
                                               "held": 0, "denied": 0, "exfil_blocked": 0})
-        ag["total"] += 1
+        ag["total"] += n
         if lvl in ("DENY", "KILLED"):
-            out["denied" if lvl == "DENY" else "killed"] += 1
-            ag["denied"] += 1
-            acls["blocked"] += 1
-            if _is_exfil(lvl, rationale):
-                out["exfil_blocked"] += 1
-                ag["exfil_blocked"] += 1
+            out["denied" if lvl == "DENY" else "killed"] += n
+            ag["denied"] += n
+            acls["blocked"] += n
+            if lvl == "DENY" and is_exfil:
+                out["exfil_blocked"] += n
+                ag["exfil_blocked"] += n
         elif allowed:
-            out["allowed"] += 1
-            ag["allowed"] += 1
+            out["allowed"] += n
+            ag["allowed"] += n
         else:  # ESCALATE / DRAFT — held for a human
-            out["held"] += 1
-            ag["held"] += 1
+            out["held"] += n
+            ag["held"] += n
     out["agents_active"] = len(out["by_agent"])
     out["top_blocked"] = sorted(
         ({"gateway_id": gid, **v} for gid, v in out["by_agent"].items()),

@@ -12,7 +12,7 @@ builder mints it from the principal key for convenience.
 
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, Literal
 
 from pydantic import BaseModel, Field
 
@@ -69,6 +69,15 @@ class GatewayConfig(BaseModel):
     # Org policy: action classes forced to require human approval (must-escalate),
     # merged into the credential on top of the profile's own escalation_required.
     extra_escalation_required: list[str] = Field(default_factory=list)
+    # Argument-aware tool classification applied before policy lookup.
+    # "coding" splits Bash into run-command vs destructive-command
+    # (eidolon.gateway.coding.classify); "none" uses tool names as-is.
+    tool_classifier: Literal["none", "coding"] = "none"
+    # Durable revocations/heartbeats/budgets in a local state file, shared with
+    # any other process (e.g. the platform) that uses the same file. Unset = in-
+    # process only, so a revocation elsewhere never reaches this engine.
+    state_path: str | None = None
+    budget_window_seconds: int = 3600
 
 
 def build_engine(
@@ -90,10 +99,21 @@ def build_engine(
         sage.observe(principal_pub, content, "memory", "gateway.policy")
 
     # The gateway holds exactly one authority: pin it as the only trust anchor.
-    themis = Themis(trusted_principals=[principal_pub])
+    if config.state_path:
+        from eidolon.common.state_db import StateDB
+        from eidolon.kairos.types import SqliteBudgetLedger
+        from eidolon.themis.revocation_store import SqliteRevocationStore
+
+        state = StateDB(config.state_path)
+        themis = Themis(store=SqliteRevocationStore(state, settings.heartbeat_ttl_seconds),
+                        trusted_principals=[principal_pub])
+        budget_ledger: BudgetLedger = SqliteBudgetLedger(state, config.budget_window_seconds)
+    else:
+        themis = Themis(trusted_principals=[principal_pub])
+        budget_ledger = BudgetLedger(config.budget_window_seconds)
     ethos = Ethos(sage, style=style, profile=profile, embedder=HashingEmbedder())
     kairos = Kairos(themis=themis, ethos=ethos, basanos=Basanos(), horkos=Horkos(sage),
-                    sage=sage, profile=profile, settings=settings, budget=BudgetLedger())
+                    sage=sage, profile=profile, settings=settings, budget=budget_ledger)
 
     budget = dict(config.budget)
     budget.setdefault("scope_expansion", 0)
@@ -155,4 +175,13 @@ def build_engine(
         kairos=kairos, policy_map=policy_map, chain=[root], principal_id=principal_pub,
         certificates=certs, integrity_certificate=icert, taint=taint, purpose=purpose,
         reporter=reporter, org_policy=org_policy,
+        classifier=_classifier(config.tool_classifier),
     )
+
+
+def _classifier(name: str):
+    if name == "coding":
+        from eidolon.gateway.coding import classify
+
+        return classify
+    return None

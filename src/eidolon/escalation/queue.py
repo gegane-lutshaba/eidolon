@@ -17,6 +17,7 @@ from eidolon.escalation.types import (
     EscalationRequest,
     EscalationStatus,
     make_approval,
+    verify_approval,
 )
 from eidolon.kairos.types import Decision, DecisionLevel
 from eidolon.types import Action, Context
@@ -79,6 +80,17 @@ class EscalationQueue:
             update={"status": EscalationStatus.APPROVED, "approval": approval}))
         return approval
 
+    def approve_signed(self, request_id: str, approval: Approval) -> Approval:
+        """Approve with an Approval the principal signed locally — the private
+        key never reaches the server. Rejected unless it is a valid, unexpired
+        signature by this escalation's principal over this exact action."""
+        req = self._require_pending(request_id)
+        if not verify_approval(approval, req.action, req.principal_id):
+            raise ValueError("approval is not a valid signature by the principal for this action")
+        self._put(req.model_copy(
+            update={"status": EscalationStatus.APPROVED, "approval": approval}))
+        return approval
+
     def deny(self, request_id: str) -> None:
         req = self._require_pending(request_id)
         self._put(req.model_copy(update={"status": EscalationStatus.DENIED}))
@@ -104,6 +116,8 @@ class EscalationQueue:
             raise KeyError(f"no escalation {request_id!r}")
         self.expire_stale()
         req = self.get(request_id)
+        if req is None:
+            raise KeyError(f"no escalation {request_id!r}")
         if req.status != EscalationStatus.PENDING:
             raise ValueError(f"escalation {request_id!r} is {req.status.value}, not pending")
         return req

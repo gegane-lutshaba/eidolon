@@ -26,6 +26,7 @@ from eidolon.sage.port import (
     Memory,
     ReplayFilter,
     Scope,
+    correlation_matches,
     lexical_overlap,
     now_utc,
 )
@@ -115,6 +116,8 @@ class InMemorySagePort:
             if filter.action_class and rec.action_class != filter.action_class:
                 continue
             if filter.since and rec.timestamp < filter.since:
+                continue
+            if not correlation_matches(rec, filter.correlation):
                 continue
             out.append(rec)
             if len(out) >= filter.limit:

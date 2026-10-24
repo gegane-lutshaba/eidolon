@@ -47,6 +47,8 @@ async def _downstream_session(command: str | None, args: list[str], url: str | N
     else:
         from mcp.client.stdio import StdioServerParameters, stdio_client
 
+        if command is None:
+            raise ValueError("a downstream command or url is required")
         params = StdioServerParameters(command=command, args=args)
         async with stdio_client(params) as (read, write):
             async with ClientSession(read, write) as session:
@@ -75,7 +77,7 @@ def _build_server(engine: GovernanceEngine, downstream, tools, *, server_name: s
 
 
 async def serve(
-    downstream_command: str,
+    downstream_command: str | None,
     downstream_args: list[str],
     config: GatewayConfig,
     *,
@@ -146,7 +148,7 @@ async def serve_http(
                     await orig_startup(**kw)
                     _started.set()
 
-                uv_server.startup = startup
+                uv_server.startup = startup  # type: ignore[method-assign,assignment]
             await uv_server.serve()
 
 

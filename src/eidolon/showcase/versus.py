@@ -230,7 +230,7 @@ def _build_engine(scn: Scenario, authority: str):
             p["egress"] = True
         if st.exclusion:
             p["touches_exclusions"] = [st.exclusion]
-        policies.append(ToolPolicy(**p))
+        policies.append(ToolPolicy.model_validate(p))
     preset = PRESETS[authority]
     key = crypto.generate_keypair()
     cfg = GatewayConfig(

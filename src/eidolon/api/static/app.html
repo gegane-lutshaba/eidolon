@@ -293,8 +293,8 @@
         Claude Code:</div>
       <div class="snip"><pre id="hJson"></pre><button class="btn copy" data-t="hJson">COPY</button></div>
       <div style="color:var(--dim); font-size:12px; margin-top:12px">Every tool call is now governed.
-        Fails open if EIDOLON is unreachable — set <code style="color:var(--cyan)">EIDOLON_HOOK_STRICT=1</code>
-        to fail closed. <a id="hDocs" target="_blank" rel="noopener">Full guide →</a></div>
+        Fails closed if EIDOLON is unreachable (a stopped gate never switches governance off) —
+        set <code style="color:var(--cyan)">EIDOLON_HOOK_STRICT=0</code> to fail open for demos. <a id="hDocs" target="_blank" rel="noopener">Full guide →</a></div>
     </div>
 
     <div class="tabpane" id="pane-agentsetup" style="display:none">

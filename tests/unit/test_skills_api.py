@@ -64,8 +64,12 @@ def test_skill_save_list_run(client) -> None:
     }
     root = client.post("/delegations/mint",
                        json={"signing_key": principal.signing_key_hex, "params": params}).json()
-    certs = [{"action_class": "answer-status", "agreement": 1.0, "calibration": 1.0,
-              "sample_size": 10, "ceiling": "autonomous"}]
+    import eidolon.api.app as app_module
+    from eidolon.basanos import Certificate
+
+    certs = [app_module.runtime().issuer.sign(Certificate(
+        action_class="answer-status", agreement=1.0, calibration=1.0,
+        sample_size=10, ceiling="autonomous"), pid).model_dump(mode="json")]
     context = {"principal_id": pid, "query": "answer atlas status friday on track weekly"}
     r = client.post("/skills/run", json={
         "skill": skill, "context": context, "chain": [root], "certificates": certs,

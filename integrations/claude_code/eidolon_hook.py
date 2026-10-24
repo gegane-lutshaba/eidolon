@@ -16,8 +16,10 @@ Zero dependencies (stdlib only). Configure via environment:
 
     EIDOLON_URL         base URL (default https://eidolon.onyxcreator.com)
     EIDOLON_AGENT_KEY   the agent's egk_ gateway key (required)
-    EIDOLON_HOOK_STRICT if "1", fail CLOSED when the gate is unreachable
-                        (default: fail open, so an outage never blocks work)
+    EIDOLON_HOOK_STRICT fail CLOSED (default "1"): when the gate is unreachable,
+                        errors, or no key is configured, the tool call is
+                        denied — a stopped gateway never silently disables
+                        governance. Set "0" to fail open (demos only).
     EIDOLON_HOOK_TIMEOUT seconds to wait for the gate (default 5)
 """
 from __future__ import annotations
@@ -30,7 +32,7 @@ import urllib.request
 
 URL = os.environ.get("EIDOLON_URL", "https://eidolon.onyxcreator.com").rstrip("/")
 KEY = os.environ.get("EIDOLON_AGENT_KEY", "")
-STRICT = os.environ.get("EIDOLON_HOOK_STRICT") == "1"
+STRICT = os.environ.get("EIDOLON_HOOK_STRICT", "1").strip().lower() not in ("0", "false", "no")
 TIMEOUT = float(os.environ.get("EIDOLON_HOOK_TIMEOUT", "5"))
 
 
@@ -62,11 +64,15 @@ def main() -> None:
     try:
         payload = json.load(sys.stdin)
     except Exception:  # noqa: BLE001 — never crash the agent on bad input
+        if STRICT:
+            _emit_pre("deny", "unreadable hook payload; failing closed")
         _allow()
     event = payload.get("hook_event_name", "")
     tool = payload.get("tool_name", "")
 
     if not KEY:
+        if event != "PostToolUse" and STRICT:
+            _emit_pre("deny", "EIDOLON_AGENT_KEY is not set; failing closed")
         sys.stderr.write("EIDOLON hook: EIDOLON_AGENT_KEY not set — passing through.\n")
         _allow()
 
@@ -88,7 +94,7 @@ def main() -> None:
     except (urllib.error.URLError, TimeoutError, OSError) as exc:
         if STRICT:
             _emit_pre("deny", f"gate unreachable ({exc}); failing closed")
-        sys.stderr.write(f"EIDOLON hook: gate unreachable ({exc}); allowing (set EIDOLON_HOOK_STRICT=1 to block).\n")
+        sys.stderr.write(f"EIDOLON hook: gate unreachable ({exc}); allowing (EIDOLON_HOOK_STRICT=0).\n")
         _allow()
     except Exception as exc:  # noqa: BLE001
         if STRICT:

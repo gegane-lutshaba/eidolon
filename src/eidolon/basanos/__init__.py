@@ -1,9 +1,15 @@
 """BASANOS — certification (PRD §6.6).
 
-v1 ships the *fidelity face* only: certify, per capability class, that the twin
-decides like the principal on held-out real decisions, and gate the autonomy
-ceiling on that certificate. The *integrity face* (adversarial suites) is v2 —
-its seam is stubbed and raises NotImplementedError.
+Two faces gate the autonomy ceiling:
+
+- **Fidelity** — certify, per capability class, that the twin decides like the
+  principal on held-out real decisions (``Basanos.certify_fidelity``).
+- **Integrity** — adversarial suites (memory poisoning, injection, scope evasion)
+  must all be contained before acting-level autonomy is granted
+  (``Basanos.integrity_suite`` / ``certify_integrity``).
+
+Over the HTTP API, certificates are issued server-side and signed by a
+:class:`CertificateIssuer`, so callers cannot assert their own ceilings.
 """
 
 from eidolon.basanos.certify import Basanos, Certificate
@@ -14,10 +20,12 @@ from eidolon.basanos.integrity import (
     KairosTwinAdapter,
     TwinUnderTest,
 )
+from eidolon.basanos.issuer import CertificateIssuer
 
 __all__ = [
     "Basanos",
     "Certificate",
+    "CertificateIssuer",
     "IntegrityReport",
     "IntegrityCertificate",
     "IntegrityRunner",

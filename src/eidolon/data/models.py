@@ -99,6 +99,18 @@ class RevocationRow(Base):
     revoked_at: Mapped[_dt.datetime] = mapped_column(DateTime(timezone=True), default=_utcnow)
 
 
+class BudgetEventRow(Base):
+    """One blast-radius consumption event (KAIROS budget; windowed by ts)."""
+
+    __tablename__ = "budget_events"
+
+    seq: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    principal_id: Mapped[str] = mapped_column(String, index=True)
+    dim: Mapped[str] = mapped_column(String)
+    ts: Mapped[_dt.datetime] = mapped_column(DateTime(timezone=True), index=True)
+    amount: Mapped[int] = mapped_column(Integer)
+
+
 class HeartbeatRow(Base):
     """Last dead-man's-switch heartbeat per principal."""
 

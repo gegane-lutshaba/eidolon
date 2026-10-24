@@ -18,6 +18,8 @@ jobs:
       - name: Sync (with mcp + biscuit extras)
         run: uv sync --group dev --extra platform --extra mcp --extra biscuit
       - name: Lint
-        run: uv run ruff check src tests
+        run: uv run ruff check src tests integrations
+      - name: Type check
+        run: uv run mypy src
       - name: Tests (fast lane)
         run: uv run pytest -m "not integration" -q

@@ -24,7 +24,6 @@ import time
 
 from fastapi import Body, FastAPI, HTTPException, Request
 from fastapi.responses import (
-    HTMLResponse,
     JSONResponse,
     PlainTextResponse,
     RedirectResponse,
@@ -45,18 +44,9 @@ from eidolon.api.auth import (
     required_role,
     role_for_token,
 )
-from eidolon.basanos.certify import Certificate
-from eidolon.capture import ConsentGrant, connect, ingest, ingest_all, known_sources
-from eidolon.coaching import Aspiration, Coach
-from eidolon.common import crypto
-from eidolon.common.errors import AttenuationError, EidolonError
 from eidolon.escalation import EscalationQueue
-from eidolon.profile import ProfileLoader
 from eidolon.runtime import Runtime, build_runtime
 from eidolon.sage.port import ReplayFilter
-from eidolon.skills import Skill, SkillExecutor, SkillLibrary
-from eidolon.themis.types import Delegation, MintParams
-from eidolon.types import Action, Context
 
 app = FastAPI(title="EIDOLON", version="0.1.0")
 
@@ -64,7 +54,32 @@ _STATIC = pathlib.Path(__file__).parent / "static"
 
 _runtime: Runtime | None = None
 _escalations: EscalationQueue | None = None
-_login_hits: dict[str, list[float]] = {}  # ip -> recent login attempt times
+
+
+_login_hits: dict[str, list[float]] = {}  # ip -> recent attempt times (sliding window)
+_THROTTLE_SWEEP_EVERY = 1000
+_throttle_calls = 0
+
+
+def _throttle(request: Request, max_hits: int, window: float = 300.0,
+              detail: str = "too many attempts; try again shortly") -> None:
+    """Per-IP sliding-window limit for login/signup/contact. Raises 429.
+
+    Idle IPs are swept periodically, so the map stays bounded by recently
+    active clients instead of growing with every address ever seen."""
+    global _throttle_calls
+    ip = client_ip(request)  # proxy-aware behind Caddy (EIDOLON_TRUST_PROXY_HEADERS)
+    now = time.monotonic()
+    _throttle_calls += 1
+    if _throttle_calls % _THROTTLE_SWEEP_EVERY == 0:
+        for k in [k for k, v in _login_hits.items() if not v or now - v[-1] >= window]:
+            _login_hits.pop(k, None)
+    hits = [t for t in _login_hits.get(ip, []) if now - t < window]
+    if len(hits) >= max_hits:
+        _login_hits[ip] = hits
+        raise HTTPException(status_code=429, detail=detail)
+    hits.append(now)
+    _login_hits[ip] = hits
 
 
 def runtime() -> Runtime:
@@ -167,20 +182,11 @@ def ready() -> Response:
 
 
 # -- operator auth --------------------------------------------------------
-@app.get("/login", response_class=HTMLResponse)
-def login_page() -> str:
-    return (_STATIC / "login.html").read_text(encoding="utf-8")
 
 
 @app.post("/login")
 def login(request: Request, token: str = Body(..., embed=True)) -> Response:
-    ip = client_ip(request)  # proxy-aware behind Caddy (EIDOLON_TRUST_PROXY_HEADERS)
-    now = time.monotonic()
-    hits = [t for t in _login_hits.get(ip, []) if now - t < 300.0]
-    if len(hits) >= 10:
-        raise HTTPException(status_code=429, detail="too many attempts; try again shortly")
-    hits.append(now)
-    _login_hits[ip] = hits
+    _throttle(request, 10, 300.0, "too many attempts; try again shortly")
 
     role = role_for_token(token)
     if role is None:
@@ -240,13 +246,7 @@ def auth_signup(request: Request, email: str = Body(...), password: str = Body(.
         raise HTTPException(status_code=403, detail="signup is closed")
     if settings.invite_code and invite_code != settings.invite_code:
         raise HTTPException(status_code=403, detail="valid invite code required")
-    ip = client_ip(request)
-    now = time.monotonic()
-    hits = [t for t in _login_hits.get(ip, []) if now - t < 300.0]
-    if len(hits) >= 10:
-        raise HTTPException(status_code=429, detail="too many attempts; try again shortly")
-    hits.append(now)
-    _login_hits[ip] = hits
+    _throttle(request, 10, 300.0, "too many attempts; try again shortly")
     try:
         user = accounts_svc.create_user(_live_store(), email, password)
     except ValueError as exc:
@@ -257,13 +257,7 @@ def auth_signup(request: Request, email: str = Body(...), password: str = Body(.
 
 @app.post("/auth/login")
 def auth_login(request: Request, email: str = Body(...), password: str = Body(...)) -> Response:
-    ip = client_ip(request)
-    now = time.monotonic()
-    hits = [t for t in _login_hits.get(ip, []) if now - t < 300.0]
-    if len(hits) >= 10:
-        raise HTTPException(status_code=429, detail="too many attempts; try again shortly")
-    hits.append(now)
-    _login_hits[ip] = hits
+    _throttle(request, 10, 300.0, "too many attempts; try again shortly")
     user = accounts_svc.authenticate(_live_store(), email, password)
     if user is None:
         raise HTTPException(status_code=401, detail="invalid email or password")
@@ -704,9 +698,6 @@ def api_certify_agent(request: Request, agent_id: str) -> dict:
 
 
 # NOTE: specific routes before the catch-all /certified/{cert_id} page.
-@app.get("/certified", response_class=HTMLResponse)
-def certified_directory() -> str:
-    return (_STATIC / "certified.html").read_text(encoding="utf-8")
 
 
 @app.get("/certified/list")
@@ -737,17 +728,11 @@ def certificate_badge(cert_id: str) -> Response:
                     headers={"Cache-Control": "public, max-age=3600"})
 
 
-@app.get("/certified/{cert_id}", response_class=HTMLResponse)
-def certificate_page(cert_id: str) -> str:
-    return (_STATIC / "certificate.html").read_text(encoding="utf-8")
-
-
 @app.get("/api/feed/recent")
 def api_feed_recent(request: Request, limit: int = 50) -> list[dict]:
     _user, org_id = _req_org(request, "auditor")
     owned = accounts_svc.owned_gateway_ids(_live_store(), org_id)
-    events = live_svc.recent_events(_live_store(), limit=500)
-    return [e for e in events if e["gateway_id"] in owned][-limit:]
+    return live_svc.recent_events(_live_store(), limit=max(1, min(limit, 500)), gateway_ids=owned)
 
 
 @app.get("/api/feed")
@@ -789,9 +774,6 @@ async def api_feed(request: Request):
 # Delegations is the one raw mint/attenuate/revoke tool, reached from /live.
 # (The former /console hub and /console/approvals were retired — approvals
 # live inline in /live; agents live in /app.)
-@app.get("/console/delegations", response_class=HTMLResponse)
-def console_delegations() -> str:
-    return (_STATIC / "console_delegations.html").read_text(encoding="utf-8")
 
 
 @app.get("/console")
@@ -800,42 +782,6 @@ def console_redirect() -> Response:
 
 
 # -- public landing + product app pages -----------------------------------
-@app.get("/", response_class=HTMLResponse)
-def landing() -> str:
-    """The public landing page (retro-arcade)."""
-    return (_STATIC / "landing.html").read_text(encoding="utf-8")
-
-
-@app.get("/signup", response_class=HTMLResponse)
-def signup_page() -> str:
-    return (_STATIC / "signup.html").read_text(encoding="utf-8")
-
-
-@app.get("/roadmap", response_class=HTMLResponse)
-def roadmap_page() -> str:
-    """The public roadmap — Gegane's boss run (what shipped, what's next)."""
-    return (_STATIC / "roadmap.html").read_text(encoding="utf-8")
-
-
-@app.get("/portal", response_class=HTMLResponse)
-def portal_page() -> str:
-    """The ONYX ARCADE portal served at the root domain (via Caddy rewrite)."""
-    return (_STATIC / "portal.html").read_text(encoding="utf-8")
-
-
-@app.get("/paper", response_class=HTMLResponse)
-def paper_page() -> str:
-    """The white paper (revision 2) as an in-theme arcade page (rendered client-side)."""
-    return (_STATIC / "paper.html").read_text(encoding="utf-8")
-
-
-@app.get("/og.png")
-def og_image() -> Response:
-    """Arcade link-preview card (Open Graph / X)."""
-    from fastapi.responses import FileResponse
-
-    return FileResponse(_STATIC / "og.png", media_type="image/png",
-                        headers={"Cache-Control": "public, max-age=86400"})
 
 
 # -- brand icons ----------------------------------------------------------
@@ -880,12 +826,6 @@ def webmanifest() -> dict:
     }
 
 
-@app.get("/contact", response_class=HTMLResponse)
-def contact_page() -> str:
-    """JOIN THE CO-OP — collaboration/contact funnel."""
-    return (_STATIC / "contact.html").read_text(encoding="utf-8")
-
-
 @app.post("/contact")
 def contact_submit(
     request: Request,
@@ -898,13 +838,7 @@ def contact_submit(
     from eidolon.api import community
     from eidolon.api.notify import notify_lead
 
-    ip = client_ip(request)
-    now = time.monotonic()
-    hits = [t for t in _login_hits.get(ip, []) if now - t < 300.0]
-    if len(hits) >= 8:
-        raise HTTPException(status_code=429, detail="too many submissions; try again shortly")
-    hits.append(now)
-    _login_hits[ip] = hits
+    _throttle(request, 8, 300.0, "too many submissions; try again shortly")
     try:
         lead = community.save_lead(_live_store(), name, email, handle, interest, message)
     except ValueError as exc:
@@ -944,12 +878,6 @@ def paper_content() -> Response:
     md = md.replace("Mthandazo Ndhlovu", "Gegane")
     md = md.replace("mthandazogegane@gmail.com", "[contact](/contact)")
     return PlainTextResponse(md, media_type="text/markdown")
-
-
-@app.get("/app", response_class=HTMLResponse)
-def app_page() -> str:
-    """The user product: agents, connect, gamified mission control."""
-    return (_STATIC / "app.html").read_text(encoding="utf-8")
 
 
 @app.get("/stats/public")
@@ -1049,11 +977,6 @@ def challenge_call(
     return _challenge_for(request, response).call(tool, arguments).model_dump()
 
 
-@app.get("/versus", response_class=HTMLResponse)
-def versus_page() -> str:
-    return (_STATIC / "versus.html").read_text(encoding="utf-8")
-
-
 @app.get("/versus/scenarios")
 def versus_scenarios() -> list[dict]:
     from eidolon.showcase.versus import list_scenarios
@@ -1107,121 +1030,6 @@ def challenge_reset(request: Request) -> dict:
     return {"ok": True}
 
 
-@app.post("/keypair")
-def keypair() -> dict:
-    """Generate an Ed25519 keypair (principal or agent identity)."""
-    kp = crypto.generate_keypair()
-    return {"public_key": kp.public_key_hex, "signing_key": kp.signing_key_hex}
-
-
-@app.post("/delegations/mint")
-def mint(signing_key: str = Body(...), params: MintParams = Body(...)) -> Delegation:
-    try:
-        return runtime().themis.mint(signing_key, params)
-    except AttenuationError as exc:
-        raise HTTPException(status_code=400, detail=str(exc)) from exc
-
-
-@app.post("/delegations/attenuate")
-def attenuate(
-    parent: Delegation = Body(...),
-    subset: MintParams = Body(...),
-    signing_key: str = Body(...),
-) -> Delegation:
-    try:
-        return runtime().themis.attenuate(parent, subset, signing_key)
-    except AttenuationError as exc:
-        raise HTTPException(status_code=400, detail=str(exc)) from exc
-
-
-@app.post("/delegations/revoke")
-def revoke(delegation_id: str = Body(..., embed=True)) -> dict:
-    runtime().themis.revoke(delegation_id)
-    return {"revoked": delegation_id}
-
-
-@app.post("/heartbeat")
-def heartbeat(principal_id: str = Body(..., embed=True)) -> dict:
-    runtime().themis.heartbeat(principal_id)
-    return {"ok": True}
-
-
-@app.post("/resolve")
-def resolve(
-    action: Action = Body(...),
-    context: Context = Body(...),
-    chain: list[Delegation] = Body(...),
-    certificates: list[Certificate] = Body(default_factory=list),
-) -> dict:
-    # Certificates would normally be looked up per-twin from the store; the
-    # caller supplies the twin's current fidelity certificates. Absent any, an
-    # uncertified class is capped at 'observe' and escalates (certify-first).
-    try:
-        decision = runtime().kairos.resolve(action, context, chain, certificates)
-    except EidolonError as exc:
-        raise HTTPException(status_code=409, detail=str(exc)) from exc
-    out = decision.model_dump()
-    # An escalated/drafted decision becomes a pending item in the approval
-    # inbox, carrying the chain + certificates so an approval can re-execute.
-    if decision.level.value in ("ESCALATE", "DRAFT"):
-        req = escalations().enqueue(decision, action, context, exec_context={
-            "chain": [d.model_dump(mode="json") for d in chain],
-            "certificates": [c.model_dump(mode="json") for c in certificates],
-        })
-        out["escalation_id"] = req.id
-        # Ping the operator where they are (Telegram/Slack), fire-and-forget.
-        from eidolon.api.notify import notify_escalation
-
-        notify_escalation(req.id, req.action_class, req.message)
-    return out
-
-
-@app.get("/escalations")
-def list_escalations(principal_id: str | None = None) -> list[dict]:
-    """Pending approvals. Omit principal_id for the full operator inbox."""
-    q = escalations()
-    items = q.list_pending(principal_id) if principal_id else q.list_all_pending()
-    return [r.model_dump(mode="json") for r in items]
-
-
-@app.post("/escalations/{request_id}/approve")
-def approve_escalation(request_id: str, signing_key: str = Body(..., embed=True)) -> dict:
-    q = escalations()
-    req = q.get(request_id)
-    if req is None:
-        raise HTTPException(status_code=404, detail="no such escalation")
-    try:
-        approval = q.approve(request_id, signing_key)
-    except (ValueError, KeyError) as exc:
-        raise HTTPException(status_code=409, detail=str(exc)) from exc
-    ec = q.exec_context_for(request_id)
-    chain = [Delegation.model_validate(d) for d in ec.get("chain", [])]
-    certs = [Certificate.model_validate(c) for c in ec.get("certificates", [])]
-    decision = runtime().kairos.resolve_with_approval(req.action, _ctx(req), chain, approval, certs)
-    return {"approved": request_id, "decision": decision.model_dump()}
-
-
-@app.post("/escalations/{request_id}/deny")
-def deny_escalation(request_id: str) -> dict:
-    try:
-        escalations().deny(request_id)
-    except (ValueError, KeyError) as exc:
-        raise HTTPException(status_code=409, detail=str(exc)) from exc
-    return {"denied": request_id}
-
-
-def _ctx(req) -> Context:
-    return Context(principal_id=req.principal_id, situation=req.action_class)
-
-
-@app.get("/replay")
-def replay(principal_id: str, action_class: str | None = None, limit: int = 1000) -> list[dict]:
-    records = runtime().horkos.replay(
-        ReplayFilter(principal_id=principal_id, action_class=action_class, limit=limit)
-    )
-    return [r.model_dump(mode="json") for r in records]
-
-
 # -- mission control: gateway ingest + live feed --------------------------
 _live_hub = live_svc.LiveHub()
 _live_sf = None  # cached sessionmaker for the operational store
@@ -1253,7 +1061,7 @@ def ingest_event(request: Request, event: live_svc.GatewayEvent = Body(...)) -> 
             "gateway_id": agent["id"],
             "agent": event.agent or agent["name"],
         })
-    elif not is_valid_gateway_key(key):
+    elif not is_valid_gateway_key(key, request=request):
         raise HTTPException(status_code=401, detail="valid gateway key required",
                             headers={"WWW-Authenticate": "Bearer"})
     killed = live_svc.record_event(_live_store(), event)
@@ -1372,17 +1180,7 @@ def restore_gateway(gateway_id: str) -> dict:
     return {"gateway_id": gateway_id, "killed": False}
 
 
-@app.get("/live", response_class=HTMLResponse)
-def live_page() -> str:
-    """Mission control: live feed, agent cards, approvals, kill switch."""
-    return (_STATIC / "live.html").read_text(encoding="utf-8")
-
-
 # -- audit console (gated to auditor+ by the auth middleware) -------------
-@app.get("/audit", response_class=HTMLResponse)
-def audit_console() -> str:
-    """Session replay, chain integrity, export."""
-    return (_STATIC / "audit.html").read_text(encoding="utf-8")
 
 
 @app.get("/audit/chain")
@@ -1422,85 +1220,15 @@ def audit_export_csv(
     )
 
 
-@app.post("/capture/ingest")
-def capture_ingest(
-    consent: ConsentGrant = Body(...),
-    records: list[dict] = Body(...),
-) -> dict:
-    connector = connect(consent.source, consent, lambda: records)
-    mem_ids = ingest(runtime().sage, connector)
-    return {"ingested": mem_ids}
+# -- routers by surface ---------------------------------------------------
+from eidolon.api.routes import gate as _gate_routes  # noqa: E402
 
+app.include_router(_gate_routes.router)
+# Registered last: its `/certified/{cert_id}` page must not shadow the
+# `/certified/list|{id}.json|{id}/badge.svg` API routes defined above.
+from eidolon.api.routes import pages as _page_routes  # noqa: E402
 
-@app.get("/capture/sources")
-def capture_sources() -> dict:
-    return {"sources": known_sources()}
-
-
-@app.post("/capture/ingest_multi")
-def capture_ingest_multi(
-    batches: list[dict] = Body(...),  # [{consent: ConsentGrant, records: [...]}]
-) -> dict:
-    # Build one consent-gated connector per source, then ingest them together.
-    connectors = []
-    for batch in batches:
-        consent = ConsentGrant.model_validate(batch["consent"])
-        records = batch.get("records", [])
-        try:
-            connectors.append(connect(consent.source, consent, lambda r=records: r))
-        except EidolonError as exc:
-            raise HTTPException(status_code=409, detail=str(exc)) from exc
-    return {"ingested": ingest_all(runtime().sage, connectors)}
-
-
-@app.get("/profiles/{profile_id}")
-def get_profile(profile_id: str) -> dict:
-    try:
-        profile = ProfileLoader().load(profile_id)
-    except EidolonError as exc:
-        raise HTTPException(status_code=404, detail=str(exc)) from exc
-    return profile.model_dump(by_alias=True, mode="json")
-
-
-@app.post("/skills")
-def save_skill(skill: Skill = Body(...)) -> dict:
-    mem_id = SkillLibrary(runtime().sage).save(skill)
-    return {"skill_id": skill.id, "mem_id": mem_id}
-
-
-@app.get("/skills")
-def list_skills(principal_id: str, query: str = "", k: int = 5) -> list[dict]:
-    skills = SkillLibrary(runtime().sage).load(principal_id, query, k=k)
-    return [s.model_dump(mode="json") | {"id": s.id} for s in skills]
-
-
-@app.post("/skills/run")
-def run_skill(
-    skill: Skill = Body(...),
-    context: Context = Body(...),
-    chain: list[Delegation] = Body(...),
-    certificates: list[Certificate] = Body(default_factory=list),
-    params: dict[str, str] = Body(default_factory=dict),
-) -> dict:
-    # Subordinate to KAIROS: every step is re-resolved through the gate.
-    rt = runtime()
-    try:
-        run = SkillExecutor(rt.kairos).run(
-            skill, context, chain, certificates, params=params
-        )
-    except EidolonError as exc:
-        raise HTTPException(status_code=409, detail=str(exc)) from exc
-    return run.model_dump(mode="json")
-
-
-@app.post("/coaching/report")
-def coaching_report(aspiration: Aspiration = Body(...)) -> dict:
-    # Read-only + decoupled: reads the attestation ledger, never writes back to
-    # the operating model.
-    rt = runtime()
-    attestations = rt.horkos.replay(ReplayFilter(principal_id=aspiration.principal_id, limit=5000))
-    report = Coach().coach(aspiration, attestations)
-    return report.model_dump(mode="json")
+app.include_router(_page_routes.router)
 
 
 # -- managed tier: the platform-hosted MCP gateway -------------------------

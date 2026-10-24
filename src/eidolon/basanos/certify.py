@@ -49,6 +49,13 @@ class Certificate(BaseModel):
     calibration: float = Field(ge=0.0, le=1.0)
     sample_size: int
     ceiling: AutonomyLevel
+    # Set when a server-side BASANOS issued the certificate (see
+    # basanos.issuer.CertificateIssuer): binds it to one principal and makes it
+    # tamper-evident, so an API caller cannot assert its own autonomy ceiling.
+    # In-process library use (e.g. the gateway's self-certified engine) leaves
+    # both unset.
+    principal_id: str | None = None
+    issuer_sig: str | None = None
 
 
 # Agreement/calibration must clear the profile target before a class earns any

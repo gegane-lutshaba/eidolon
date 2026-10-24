@@ -55,6 +55,12 @@ class Settings(BaseSettings):
 
     # --- THEMIS dead-man's-switch ----------------------------------------
     heartbeat_ttl_seconds: int = Field(default=3600, ge=1)
+    # Rolling window for *_per_window budget dimensions (posts, egress…).
+    budget_window_seconds: int = Field(default=3600, ge=1)
+    # Durable local state (revocations, heartbeats, budget) for single-box
+    # deployments without Postgres. Shared by every process using the same file.
+    # Ignored on the postgres backend, which keeps them in the operational store.
+    state_path: str | None = None
     # Optional comma-separated principal pubkeys (hex) allowed to root a
     # delegation chain. Unset = any principal, but a chain must still be
     # rooted in the principal each action is attributed to.
@@ -80,9 +86,21 @@ class Settings(BaseSettings):
     #   EIDOLON_ADMIN_TOKEN -> "admin"   : full control plane (mint/revoke, approve…)
     #   EIDOLON_AUDIT_TOKEN -> "auditor" : read-only forensic surface (/audit, /replay)
     # Fail-closed: with either set, unauthenticated/insufficient access is denied.
-    # With NEITHER set the platform runs OPEN (localhost dev only) and warns once.
+    # With NEITHER set the platform runs OPEN, but only for loopback callers:
+    # a request from any other address is treated as unauthenticated unless
+    # EIDOLON_OPEN_MODE=1 explicitly opens it to the network (demos only).
     admin_token: str | None = None
     audit_token: str | None = None
+    open_mode: bool = False
+    # Server-side signing: /keypair, and signing keys in request bodies for
+    # /delegations/mint|attenuate and /escalations/{id}/approve. Keys then cross
+    # HTTP (proxies, logs). Set false in production and use the pre-signed
+    # variants (/delegations/register, approve with a signed `approval`).
+    allow_server_signing: bool = True
+    # HMAC key BASANOS signs issued certificates with. Unset = a random
+    # per-process key (certificates are then valid only in that process); set it
+    # when several processes or restarts must honour the same certificates.
+    certificate_key: str | None = None
     # Mark the session cookie Secure (HTTPS only). Enable behind a TLS proxy.
     session_cookie_secure: bool = False
     # Optional comma-separated Host allow-list (adds TrustedHostMiddleware).
@@ -149,7 +167,7 @@ ENV_FILE_VAR = "EIDOLON_ENV_FILE"
 @lru_cache
 def get_settings() -> Settings:
     """Settings from the environment, plus the file named by ``EIDOLON_ENV_FILE`` if set."""
-    return Settings(_env_file=os.environ.get(ENV_FILE_VAR) or None)
+    return Settings(_env_file=os.environ.get(ENV_FILE_VAR) or None)  # type: ignore[call-arg]
 
 
 def use_env_file(path: str = ".env") -> None:

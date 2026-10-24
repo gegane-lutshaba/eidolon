@@ -7,9 +7,9 @@ by config (in-memory fake vs live SDK).
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
-from eidolon.basanos import Basanos
+from eidolon.basanos import Basanos, Certificate, CertificateIssuer
 from eidolon.config import Settings, get_settings
 from eidolon.ethos.facade import Ethos
 from eidolon.ethos.style import ClaudeStyleEngine
@@ -33,6 +33,21 @@ class Runtime:
     horkos: Horkos
     kairos: Kairos
     budget: BudgetLedger
+    # Certificates this server issued, by principal -> action class. The API
+    # resolves with these (plus caller-presented ones that verify), never with
+    # bare caller assertions.
+    issuer: CertificateIssuer = field(default_factory=CertificateIssuer)
+    issued: dict[str, dict[str, Certificate]] = field(default_factory=dict)
+
+    def certificates_for(self, principal_id: str, presented: list[Certificate] | None = None
+                         ) -> tuple[list[Certificate], list[str]]:
+        """Effective certificates for a principal: server-issued ones, overlaid
+        with caller-presented certificates that carry a valid issuer signature.
+        Returns (certificates, rejected classes)."""
+        accepted, rejected = self.issuer.accept(list(presented or []), principal_id)
+        merged = dict(self.issued.get(principal_id, {}))
+        merged.update({c.action_class: c for c in accepted})
+        return list(merged.values()), rejected
 
 
 def build_runtime(
@@ -47,23 +62,39 @@ def build_runtime(
 
     # On the postgres backend, revocations + heartbeats persist in the
     # operational store: a restart never resurrects revoked authority.
+    window = settings.budget_window_seconds
     if settings.sage_backend == "postgres":
+        from eidolon.kairos.types import PostgresBudgetLedger
         from eidolon.themis.revocation_store import PostgresRevocationStore
 
         themis = Themis(
             store=PostgresRevocationStore(settings.heartbeat_ttl_seconds),
             trusted_principals=settings.trusted_principal_ids(),
         )
+        budget: BudgetLedger = PostgresBudgetLedger(window)
+    elif settings.state_path:
+        # No Postgres, but a durable state file: revocations, heartbeats and
+        # budgets survive restarts and are shared by every process on the box.
+        from eidolon.common.state_db import StateDB
+        from eidolon.kairos.types import SqliteBudgetLedger
+        from eidolon.themis.revocation_store import SqliteRevocationStore
+
+        db = StateDB(settings.state_path)
+        themis = Themis(
+            store=SqliteRevocationStore(db, settings.heartbeat_ttl_seconds),
+            trusted_principals=settings.trusted_principal_ids(),
+        )
+        budget = SqliteBudgetLedger(db, window)
     else:
         themis = Themis(
             heartbeat_ttl_seconds=settings.heartbeat_ttl_seconds,
             trusted_principals=settings.trusted_principal_ids(),
         )
+        budget = BudgetLedger(window)
     style = ClaudeStyleEngine(settings) if settings.style_enabled else None
     ethos = Ethos(sage, style=style, profile=profile)
     basanos = Basanos()
     horkos = Horkos(sage)
-    budget = BudgetLedger()
     kairos = Kairos(
         themis=themis,
         ethos=ethos,
@@ -84,4 +115,5 @@ def build_runtime(
         horkos=horkos,
         kairos=kairos,
         budget=budget,
+        issuer=CertificateIssuer(settings.certificate_key),
     )

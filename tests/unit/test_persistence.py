@@ -140,8 +140,11 @@ def test_escalate_restart_approve_over_http(tmp_path, monkeypatch) -> None:
                        "permitted_classes": ["commit-action"],
                        "escalation_required": ["commit-action"], "max_autonomy": "autonomous",
                        "blast_radius_budget": {"scope_expansion": 0}}}).json()
-        certs = [{"action_class": "commit-action", "agreement": 1.0, "calibration": 1.0,
-                  "sample_size": 10, "ceiling": "draft"}]
+        from eidolon.basanos import Certificate
+
+        certs = [app_module.runtime().issuer.sign(Certificate(
+            action_class="commit-action", agreement=1.0, calibration=1.0,
+            sample_size=10, ceiling="draft"), pid).model_dump(mode="json")]
         r = client.post("/resolve", json={
             "action": {"id": "a", "action_class": "commit-action",
                        "description": "sign the atlas contract",

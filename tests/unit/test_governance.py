@@ -98,3 +98,38 @@ def test_governance_summary_requires_auth(ctx) -> None:
     client, sf, acc, _ = ctx
     client.cookies.clear()
     assert client.get("/api/governance/summary").status_code == 401
+
+
+def test_recent_feed_is_not_crowded_out_by_other_tenants(ctx) -> None:
+    """A quiet org's feed must show its events even when another org is busy:
+    the org filter is applied in the query, not after a global top-N."""
+    client, sf, acc, _ = ctx
+    mine = _signed_in_agent(client, sf, acc, "quiet@x.com")
+    _emit(sf, mine, "NOTIFY_ACT", True)  # one event, early
+    other_user = acc.create_user(sf, "busy@x.com", "password12")
+    other_org = acc.ensure_personal_org(sf, other_user["id"], other_user["email"])
+    busy = acc.create_agent(sf, other_org, other_user["id"], "busy", "coding/reader")["id"]
+    for _ in range(600):
+        _emit(sf, busy, "NOTIFY_ACT", True)
+    feed = client.get("/api/feed/recent?limit=50").json()
+    assert [e["gateway_id"] for e in feed] == [mine]
+
+
+def test_throttle_sweeps_idle_clients(ctx, monkeypatch) -> None:
+    _client, _sf, _acc, app_module = ctx
+    from starlette.requests import Request
+
+    def req(ip: str) -> Request:
+        return Request({"type": "http", "headers": [], "client": (ip, 1)})
+
+    clock = [1000.0]
+    monkeypatch.setattr(app_module.time, "monotonic", lambda: clock[0])
+    monkeypatch.setattr(app_module, "_THROTTLE_SWEEP_EVERY", 5)
+    monkeypatch.setattr(app_module, "_throttle_calls", 0)  # counter is process-wide
+    app_module._login_hits.clear()
+    for i in range(4):
+        app_module._throttle(req(f"10.0.0.{i}"), 10, 300.0)
+    assert len(app_module._login_hits) == 4
+    clock[0] += 301  # everyone goes idle
+    app_module._throttle(req("10.0.0.99"), 10, 300.0)  # 5th call triggers a sweep
+    assert set(app_module._login_hits) == {"10.0.0.99"}
