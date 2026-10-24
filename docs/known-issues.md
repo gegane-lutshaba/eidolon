@@ -10,23 +10,73 @@ configuration. **Medium** means a real gap with a mitigation or narrow reach.
 
 | # | Severity | Area | Summary |
 |---|---|---|---|
-| 1 | High | API | `/resolve` trusts caller-supplied BASANOS certificates |
-| 2 | High | API | Server runs fully open when no auth token is set |
-| 3 | Medium | API | Private keys cross HTTP (`/keypair`, signing keys in request bodies) |
-| 4 | Medium | Hook | Claude Code hook fails open by default |
-| 5 | Medium | THEMIS | Revocations and heartbeats are in-memory unless on Postgres |
-| 6 | Medium | KAIROS | `BudgetLedger` has no window and no persistence |
-| 7 | Medium | THEMIS | Scopes are exact-value sets; no hierarchical path prefixes |
+| 1 | High | API | ~~`/resolve` trusts caller-supplied BASANOS certificates~~ (fixed) |
+| 2 | High | API | ~~Server runs fully open when no auth token is set~~ (fixed) |
+| 3 | Medium | API | ~~Private keys cross HTTP (`/keypair`, signing keys in request bodies)~~ (fixed) |
+| 4 | Medium | Hook | ~~Claude Code hook fails open by default~~ (fixed) |
+| 5 | Medium | THEMIS | ~~Revocations and heartbeats are in-memory unless on Postgres~~ (fixed) |
+| 6 | Medium | KAIROS | ~~`BudgetLedger` has no window and no persistence~~ (fixed) |
+| 7 | Medium | THEMIS | ~~Scopes are exact-value sets; no hierarchical path prefixes~~ (fixed) |
 | 8 | Medium | Taint | ~~Plain long-token pattern taints ordinary long words~~ (fixed) |
-| 9 | Low | HORKOS | `Attestation` has no field to correlate with a caller's session |
-| 10 | Low | Gateway | Destructive-shell classifier is private to `eidolon.api` |
+| 9 | Low | HORKOS | ~~`Attestation` has no field to correlate with a caller's session~~ (fixed) |
+| 10 | Low | Gateway | ~~Destructive-shell classifier is private to `eidolon.api`~~ (fixed) |
 | 11 | Low | Config | ~~`Settings()` silently reads `.env` from the current directory~~ (fixed) |
-| 12 | Low | ETHOS | Embedders must seed precedent or routine actions escalate (undocumented) |
+| 12 | Low | ETHOS | ~~Embedders must seed precedent or routine actions escalate (undocumented)~~ (fixed) |
 | 13 | Low | Packaging | ~~The gate pulls the whole web/DB/LLM stack~~ (fixed) |
-| 14 | Low | API | `api/app.py` is a 1,500-line module with global singletons |
-| 15 | Low | Hygiene | Stale docstring, untracked TLC traces, no mypy in CI |
-| 16 | Medium | Gateway | `GovernanceEngine` has no approval path for escalated calls |
-| 17 | Medium | ETHOS | Fidelity depends on argument wording: verbose calls drop to DRAFT |
+| 14 | Low | API | `api/app.py` is a large module with global singletons (partly addressed) |
+| 15 | Low | Hygiene | ~~Stale docstring, untracked TLC traces, no mypy in CI~~ (fixed) |
+| 16 | Medium | Gateway | ~~`GovernanceEngine` has no approval path for escalated calls~~ (fixed) |
+| 17 | Medium | ETHOS | ~~Fidelity depends on argument wording: verbose calls drop to DRAFT~~ (fixed) |
+
+Fixed in the review pass (`fix/known-issues-pass`):
+- **#1 Earned certificates.** BASANOS signs the certificates it issues (`CertificateIssuer`, HMAC
+  bound to one principal, `EIDOLON_CERTIFICATE_KEY`). `POST /certify` runs fidelity certification
+  server-side from held-out decisions. `/resolve` and `/skills/run` use server-issued certificates
+  plus presented ones whose signature verifies for the acting principal; others are dropped and
+  listed in `certificates_rejected`. The embedded `GovernanceEngine` path is unchanged.
+- **#2 Loopback-only open mode.** With no token, only loopback socket peers are admin
+  (`X-Forwarded-For` can't fake it); `EIDOLON_OPEN_MODE=1` opens it deliberately. Gateway ingest
+  follows the same rule. The Docker entrypoint generates an admin token on first boot, keeps it
+  in `/data/.admin_token` (0600) and prints it.
+- **#3 Keys stay client-side.** `POST /delegations/register` verifies a locally signed chain;
+  `/escalations/{id}/approve` accepts a pre-signed `approval` (`GET /escalations/{id}` gives the
+  action digest). `EIDOLON_ALLOW_SERVER_SIGNING=false` refuses `/keypair` and `signing_key` bodies.
+- **#4 Strict hook.** The Claude Code hook denies when the gate is unreachable, errors, the key is
+  missing, or the payload is unreadable. `EIDOLON_HOOK_STRICT=0` opts out.
+- **#5/#6 Durable state without Postgres.** `StateDB` (stdlib `sqlite3`, WAL) backs
+  `SqliteRevocationStore` and `SqliteBudgetLedger`; every process on the same file sees a
+  revocation on its next check. `EIDOLON_STATE_PATH` / `GatewayConfig.state_path`. Dimensions
+  named `*_per_window` count over a rolling window (`budget_window_seconds`); `PostgresBudgetLedger`
+  covers the postgres backend.
+- **#7 Path scopes.** `path` and `*_path` selectors use prefix containment in authorization,
+  attenuation and chain intersection (`themis/scope.py`), normalised, with upward escapes and
+  absolute/relative mixes rejected. Hypothesis property: an attenuated child never authorizes what
+  its parent doesn't.
+- **#9 Correlation.** `Context.correlation` is copied onto the attestation and is queryable via
+  `ReplayFilter.correlation`; `GovernanceEngine.decide/govern(..., correlation=)`. Empty correlation
+  is omitted from the record, so earlier records hash identically and chains still verify.
+- **#10 Shared classifier.** `eidolon.gateway.coding` (no web deps) holds the native tool map, the
+  destructive-shell patterns (extended), policies and the allow/ask/deny mapping.
+  `GatewayConfig.tool_classifier="coding"` makes the engine apply it itself.
+- **#12/#17 Class-grounded fidelity.** `fidelity_rubric.baseline_precedent` lists classes that are
+  routine by construction; in-grant calls get a strong-evidence floor (traced as
+  `baseline-precedent`), so they need no seeded memories and wording can't flip them. The
+  exclusion guard runs first and ceilings still apply; the loader rejects irreversible, risk-3 or
+  escalation-required classes. The coding-agent profile uses it.
+- **#14 (partial).** The seam API moved to `api/routes/gate.py` and the HTML shells to
+  `api/routes/pages.py`. The singletons remain in `api/app.py` (the SaaS, SSO, dashboard and demo
+  surfaces are still there), so multi-process scaling still relies on the Postgres-backed stores.
+- **#15 Hygiene.** mypy passes (two real bugs fixed on the way: a null session expiry crashed
+  `user_for_session`; `_require_pending` re-read without a None check) and runs in CI. TLC traces
+  were already ignored.
+- **#16 Approval path.** `GovernanceEngine.action_for()` returns the exact `Action` to sign;
+  `decide_with_approval()` / `govern_with_approval()` rebuild it identically. If exclusions change
+  after signing (taint learns a secret the arguments carry), the digest no longer matches and the
+  call is denied.
+
+Also fixed while reviewing: `/api/feed/recent` filtered org events after a global top-500, so a
+quiet org's feed could come back empty on a busy instance; the login/signup/contact rate limiter
+never forgot an IP; `governance_summary` loaded up to 20k rows per refresh (now a SQL `GROUP BY`).
 
 Fixed while integrating (kept for the record):
 - **Delegation chains were not anchored** (`fix/themis-trust-anchor`). `Themis.verify` accepted
